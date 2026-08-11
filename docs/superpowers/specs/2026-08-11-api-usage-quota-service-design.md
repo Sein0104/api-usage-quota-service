@@ -1,5 +1,13 @@
 # API Usage Metering and Quota Service Design
 
+## 문서 관계
+
+- 이 문서: 범위, 아키텍처, 보장과 trade-off
+- [`API Contract`](./2026-08-11-api-contract-spec.md): HTTP 인증, DTO, 성공·오류 schema, pagination, idempotency replay
+- [`Database Schema`](./2026-08-11-database-schema-spec.md): PostgreSQL type, constraint, FK, index, transaction, Prisma/raw SQL 경계
+
+세 문서가 충돌하면 구현을 시작하기 전에 함께 수정한다. 실제 dependency patch version은 `package.json`과 lockfile, 실행 이미지는 Docker tag/digest, 실제 schema는 review된 migration을 단일 진실 공급원으로 사용한다.
+
 ## 1. 목적
 
 이 프로젝트는 여러 고객 프로젝트가 API Key로 인증하고, 일일 사용량을 기록하며, 설정된 쿼터를 초과한 요청을 정확히 거절하는 소형 백엔드 서비스다.
@@ -30,7 +38,7 @@
 - Project 단위 UTC 일일 쿼터 적용
 - `Idempotency-Key` 기반 중복 요청 처리
 - 일별 사용량과 남은 쿼터 조회
-- Key 생성·폐기 감사 로그와 인증·인가 실패 보안 로그
+- Project 생성 audit에 최초 Key 발급 근거를 포함하고, 이후 Key 생성·폐기는 별도 audit log로 기록
 - JSON 구조화 로그, Prometheus 메트릭, health/readiness endpoint
 - Swagger/OpenAPI 문서
 - Docker Compose와 GitHub Actions
@@ -51,15 +59,37 @@
 
 ## 3. 기술 선택
 
-- Runtime: Node.js, TypeScript
-- Framework: NestJS
-- Database: PostgreSQL
-- Data access: Prisma를 사용하되, 쿼터의 조건부 원자 갱신은 명시적 SQL로 구현
+- Runtime: Node.js 24 LTS, TypeScript 5.9
+- Framework: NestJS 11, Express adapter
+- Database: PostgreSQL 18
+- Data access: Prisma ORM 7과 `@prisma/adapter-pg`를 사용하되, 쿼터의 조건부 원자 갱신은 명시적 SQL로 구현
 - API documentation: NestJS Swagger
 - Tests: Jest, Supertest, Testcontainers
 - Metrics: Prometheus 형식의 `/metrics`
 - Local environment: Docker, Docker Compose
 - CI: GitHub Actions
+
+### Toolchain baseline
+
+- package manager는 npm 11이고 `packageManager` field와 `package-lock.json`을 commit하며 CI는 `npm ci`만 사용한다.
+- package는 ESM(`"type": "module"`)으로 구성한다. TypeScript는 `target=ES2023`, `module=NodeNext`, `moduleResolution=NodeNext`, `strict=true`를 사용하고 내부 상대 import에 `.js` 확장자를 쓴다.
+- Nest CLI의 TypeScript build와 Swagger CLI plugin의 `esmCompatible=true` 설정을 사용한다.
+- Jest는 ESM 설정의 `ts-jest` transformer와 Node `--experimental-vm-modules`로 실행한다.
+- exact dependency version은 `package.json`과 lockfile에 고정한다. 설계 문서에는 호환 major만 기록한다.
+- Node major는 `.node-version`과 `package.json#engines`, PostgreSQL major는 Compose와 Testcontainers에 동일하게 고정한다.
+- DTO validation은 `class-validator`·`class-transformer`와 global `ValidationPipe`의 whitelist/unknown-field 거절을 사용한다.
+- 환경 변수는 `@nestjs/config`와 Joi schema로 시작 시 fail-fast 검증한다.
+- 구조화 로그는 `nestjs-pino`·`pino`와 credential redaction, metric은 `prom-client`, health는 `@nestjs/terminus`를 사용한다.
+- PostgreSQL Testcontainers package는 `@testcontainers/postgresql`을 사용한다.
+- Prisma 7은 `prisma-client` generator의 `output=../src/generated/prisma`, `moduleFormat=esm`, `runtime=nodejs`를 사용한다. `prisma.config.ts`가 datasource URL을 읽고 build·test 전에 `prisma generate`를 실행한다.
+- runtime은 `pg.Pool`과 `PrismaPg` adapter를 `new PrismaClient({adapter})`에 주입한다. 기본 pool은 max 10, connection timeout 3초, idle timeout 30초이며 shutdown 시 Prisma와 pool을 모두 닫는다.
+- Prisma `BigInt`는 API mapper에서 공개 범위를 검사한 뒤 JSON number로 변환한다.
+- lint와 format은 ESLint·Prettier를 사용하고 CI는 `format:check`, `lint`, `typecheck`를 별도 실행한다.
+- 기본 HTTP port는 `3000`이며 Nest shutdown hook으로 graceful shutdown한다.
+
+필수 환경 변수는 `NODE_ENV`, `PORT`, `DATABASE_URL`, `SYSTEM_ADMIN_TOKEN`, `API_KEY_PEPPER`, `LOG_LEVEL`, `TZ=UTC`다. 두 secret은 최소 256-bit 난수여야 하며 validation 실패 시 server를 시작하지 않는다. 실제 값은 `.env`, 로그, example 파일, Git에 기록하지 않는다.
+
+기준 major는 2026-08-11의 공식 지원 상태를 따른다: [Node.js 24 LTS](https://nodejs.org/en/about/previous-releases), [NestJS 11 release](https://github.com/nestjs/nest/releases), [Prisma ORM 7](https://www.prisma.io/docs/orm), [PostgreSQL 18](https://www.postgresql.org/docs/18/).
 
 Redis를 사용하지 않는다. 단일 PostgreSQL 트랜잭션 안에서 멱등성 레코드와 쿼터 갱신을 함께 처리하면, 별도 저장소 간 정합성 문제 없이 핵심 보장을 증명할 수 있기 때문이다.
 
@@ -116,7 +146,7 @@ PostgreSQL
 
 #### AuditModule
 
-- Key 발급·폐기처럼 업무 상태를 바꾸는 행위를 동일 DB 트랜잭션에 기록
+- Project 생성과 최초 Key 발급은 하나의 `PROJECT_CREATED` audit에, 이후 Key 생성·폐기는 별도 audit에 기록
 - 인증 전 실패와 scope 거절은 영속 audit row 대신 구조화 보안 로그와 metric으로 기록
 - 쿼터 거절은 `usage_events`를 근거 기록으로 사용해 중복 audit row를 만들지 않음
 - 원문 API Key와 민감한 요청 payload를 기록하지 않음
@@ -154,7 +184,6 @@ PostgreSQL
 | `status` | `ACTIVE` 또는 `REVOKED` |
 | `created_at` | 생성 시각 |
 | `revoked_at` | 폐기 시각, nullable |
-| `last_used_at` | 마지막 성공 인증 시각, nullable |
 
 API Key 형식은 `mq_<key-id>.<random-secret>`로 한다. secret은 CSPRNG로 생성한 최소 256-bit 값이다. `key-id`로 레코드를 조회하고, secret의 HMAC digest를 constant-time 비교한다. 원문 secret과 pepper는 DB 및 로그에 저장하지 않는다. `scopes`는 PostgreSQL text array로 저장하되 애플리케이션과 DB 제약에서 허용된 enum 값만 받는다. 복합 FK의 기준이 되도록 `(project_id, id)`에도 unique constraint를 두고, 목록 조회용 `(project_id, created_at DESC, id DESC)` 인덱스를 둔다.
 
@@ -199,19 +228,18 @@ PK는 `(project_id, usage_date)`다. `used_units`와 `limit_units`는 `bigint`�
 | `project_id` | 관련 Project FK |
 | `actor_key_id` | 행위 주체 API Key, nullable |
 | `action` | 행위 종류 |
-| `resource_type` | 대상 종류 |
-| `resource_id` | 대상 ID, nullable |
+| `resource_api_key_id` | API Key action의 대상 Key, Project 생성이면 nullable |
 | `request_id` | 요청 추적 ID |
 | `metadata` | 민감정보를 제거한 JSONB |
 | `created_at` | 기록 시각 |
 
-`actor_key_id`가 있을 때 `(project_id, actor_key_id)`는 `api_keys(project_id, id)`를 참조하는 복합 FK다. `(project_id, created_at DESC, id DESC)`에 cursor 조회 인덱스를 둔다.
+`actor_key_id`와 `resource_api_key_id`가 있을 때 각각 `(project_id, key_id)` 복합 FK로 `api_keys(project_id, id)`를 참조한다. API 응답의 `resourceType`과 `resourceId`는 `action`, `project_id`, `resource_api_key_id`에서 파생한다. `(project_id, created_at DESC, id DESC)`에 cursor 조회 인덱스를 둔다.
 
 MVP는 PostgreSQL RLS를 사용하지 않는다. tenant 접근 권한은 인증된 Key에서 Project 문맥을 만들고 모든 query에 이를 강제하는 애플리케이션 계층이 담당하며, 복합 FK는 저장 데이터의 교차 tenant 참조만 차단한다.
 
 ## 6. API 계약
 
-모든 오류는 RFC 9457 Problem Details 형식을 따르며 `type`, `title`, `status`, `detail`, `code`, `requestId`를 포함한다. 쿼터 거절에는 `eventId`, `usageDate`, quota snapshot을 extension으로 추가한다.
+일반 JSON API 오류는 RFC 9457 Problem Details 형식을 따르며 `type`, `title`, `status`, `detail`, `code`, `requestId`를 포함한다. 쿼터 거절에는 `eventId`, `usageDate`, quota snapshot을 extension으로 추가한다. 단순한 container probe 호환성을 위해 health endpoint의 `503`은 `{"status":"not_ready"}` 예외를 사용한다.
 
 ### 시스템 관리
 
@@ -233,7 +261,7 @@ MVP는 PostgreSQL RLS를 사용하지 않는다. tenant 접근 권한은 인증�
 - 출력: `201`과 Key metadata, 원문 Key
 - Project에 활성 Key가 이미 20개면 `409 ACTIVE_KEY_LIMIT_REACHED`
 
-#### `GET /v1/api-keys?cursor=...`
+#### `GET /v1/api-keys?cursor=...&limit=...`
 
 - 필요 scope: `keys:manage`
 - 출력: 현재 Project의 Key metadata cursor 목록
@@ -270,12 +298,12 @@ Key 생성은 Project row를 `FOR UPDATE`로 잠근 트랜잭션에서 활성 Ke
 
 - 필요 scope: `usage:read`
 - 현재 Project의 UTC 일별 사용량만 조회
-- `from`, `to`는 필수이고 사용량이 없는 날짜는 응답에서 생략
+- `from`, `to`는 필수이고 `daily_usage` row가 없는 날짜는 생략한다. 거절 event로 row가 생성된 날짜는 `usedUnits=0`이어도 포함할 수 있다.
 - `from <= to`, 양 끝 포함 최대 90일로 제한
 
 ### 감사 로그
 
-#### `GET /v1/audit-logs?cursor=...`
+#### `GET /v1/audit-logs?cursor=...&limit=...`
 
 - 필요 scope: `audit:read`
 - 현재 Project의 로그만 cursor pagination으로 조회
@@ -346,6 +374,8 @@ RETURNING used_units, limit_units;
 | 상태 | 코드 | 조건 |
 |---:|---|---|
 | 400 | `VALIDATION_ERROR` | 잘못된 body, scope, 날짜 범위 |
+| 400 | `INVALID_CURSOR` | cursor decoding 또는 schema 오류 |
+| 401 | `INVALID_SYSTEM_ADMIN_TOKEN` | 관리자 token 누락·불일치 |
 | 401 | `INVALID_API_KEY` | 누락·형식 오류·digest 불일치·폐기된 Key |
 | 403 | `INSUFFICIENT_SCOPE` | 필요한 scope 없음 |
 | 404 | `RESOURCE_NOT_FOUND` | 현재 Project 문맥에서 대상 없음 |
@@ -353,6 +383,7 @@ RETURNING used_units, limit_units;
 | 409 | `CANNOT_REVOKE_CURRENT_KEY` | 현재 요청을 인증한 Key 자체를 폐기하려 함 |
 | 409 | `ACTIVE_KEY_LIMIT_REACHED` | Project의 활성 Key가 20개 |
 | 429 | `QUOTA_EXCEEDED` | 일일 쿼터 부족 |
+| 415 | `UNSUPPORTED_MEDIA_TYPE` | JSON body endpoint에 다른 media type 사용 |
 | 500 | `INTERNAL_ERROR` | 예상하지 못한 서버 오류 |
 | 503 | `DEPENDENCY_UNAVAILABLE` | PostgreSQL 연결 불가 |
 | 503 | `CONCURRENT_REQUEST_RETRY_EXHAUSTED` | 드문 idempotency 경합 재시도 소진 |
@@ -474,6 +505,8 @@ Project ID와 Key ID는 고카디널리티이므로 metric label에 넣지 않�
 저장소에는 다음 문서를 포함한다.
 
 - README: 문제, 실행법, 보장 범위, 데모 명령
+- API Contract: 요청·응답·오류·pagination·멱등 replay 계약
+- Database Schema: type·constraint·FK·index·transaction 계약
 - OpenAPI 문서
 - ERD
 - ADR 1: Redis 대신 PostgreSQL 조건부 갱신을 선택한 이유
@@ -489,6 +522,7 @@ Project ID와 Key ID는 고카디널리티이므로 metric label에 넣지 않�
 
 - Docker Compose 한 명령으로 실행 가능
 - Swagger에서 전체 API 계약 확인 가능
+- API Contract와 Database Schema 명세가 구현·OpenAPI·migration과 일치
 - 원문 API Key는 발급 응답 외 어디에도 저장·기록되지 않음
 - Project 간 접근 차단 테스트 통과
 - 교차 Project Key 참조를 복합 FK가 거부
