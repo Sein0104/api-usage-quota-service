@@ -72,6 +72,32 @@ describe('platform HTTP contract', () => {
     expect(response.body.requestId).toBe(response.headers['x-request-id']);
   });
 
+  it('returns validation Problem Details for malformed JSON', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/v1/test-validation')
+      .set('Content-Type', 'application/json')
+      .set('X-Request-Id', 'client-supplied-id')
+      .send('{"name":');
+
+    expect(response).toMatchObject({
+      status: 400,
+      headers: {
+        'content-type': expect.stringContaining('application/problem+json'),
+      },
+      body: {
+        type: 'urn:api-usage-quota-service:problem:validation-error',
+        title: 'Validation failed',
+        status: 400,
+        detail: 'Request validation failed.',
+        code: 'VALIDATION_ERROR',
+        requestId: expect.any(String),
+      },
+    });
+    expect(response.headers['x-request-id']).toMatch(UUID_V4);
+    expect(response.headers['x-request-id']).not.toBe('client-supplied-id');
+    expect(response.body.requestId).toBe(response.headers['x-request-id']);
+  });
+
   it('returns unsupported media type Problem Details for a JSON body endpoint', async () => {
     const response = await request(app.getHttpServer())
       .post('/v1/test-validation')
