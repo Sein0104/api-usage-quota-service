@@ -2,7 +2,7 @@
 
 ## 1. 문서 지위
 
-이 문서는 HTTP API의 구현·OpenAPI 생성·계약 테스트 기준이다. 상위 범위와 설계 이유는 [`2026-08-11-api-usage-quota-service-design.md`](./2026-08-11-api-usage-quota-service-design.md), 저장 구조와 제약은 [`2026-08-11-database-schema-spec.md`](./2026-08-11-database-schema-spec.md)를 따른다.
+이 문서는 HTTP API의 구현·OpenAPI 생성·계약 테스트 기준이다. 상위 범위와 설계 이유는 [`service-design.md`](../architecture/service-design.md), 저장 구조와 제약은 [`database-schema.md`](./database-schema.md)를 따른다.
 
 문서의 `MUST`, `MUST NOT`, `SHOULD`는 구현 요구사항이다. 이 문서와 생성된 OpenAPI가 다르면 구현 전 둘 중 하나를 수정해 일치시켜야 한다.
 
@@ -10,15 +10,19 @@
 
 ### 2.1 Base URL과 media type
 
-- API prefix: `/v1`
+- 업무 API prefix: `/v1`
+- 운영·문서 endpoint인 `/health/*`, `/metrics`, `/docs`, `/openapi.json`에는 `/v1` prefix를 붙이지 않는다.
 - JSON 요청: `Content-Type: application/json`
 - body가 있는 성공 응답: `application/json`; `204`는 body와 Content-Type 없음
-- 오류 응답: `application/problem+json`
+- `/v1` 오류와 `/metrics` 인증 오류: `application/problem+json`
+- health 성공 응답과 readiness 준비 실패 `503`: `application/json`
 - 메트릭: Prometheus text exposition format
 - JSON field: `camelCase`
 - DB·로그 field: `snake_case`
 - JSON body에 명세되지 않은 field가 있으면 `400 VALIDATION_ERROR`
 - body가 있는 endpoint에 다른 media type을 보내면 `415 UNSUPPORTED_MEDIA_TYPE`
+
+Swagger UI는 `/docs`, OpenAPI JSON은 `/openapi.json`에서 제공한다. `SWAGGER_ENABLED`는 development·test에서 기본 `true`, production에서 기본 `false`다. production에서는 포트폴리오 데모처럼 계약 공개가 필요한 경우에만 명시적으로 활성화한다. 활성화된 문서는 인증 없이 읽을 수 있지만 secret 값, 내부 연결 문자열, 실제 credential 예시를 포함하지 않는다. 비활성화되면 두 경로 모두 `404 ROUTE_NOT_FOUND` Problem Details다.
 
 ### 2.2 값 표현
 
@@ -43,18 +47,21 @@
 
 ### 2.4 인증 형식
 
-시스템 관리자와 Project API Key 모두 다음 header를 사용한다.
+시스템 관리자, Project API Key, metric 운영 token은 모두 다음 header를 사용한다.
 
 ```http
 Authorization: Bearer <credential>
 ```
 
 - 시스템 관리자 credential은 `SYSTEM_ADMIN_TOKEN`과 constant-time 비교한다.
+- metric credential은 `METRICS_TOKEN`과 constant-time 비교하며 `/metrics`에만 사용할 수 있다.
 - Project credential 형식은 `mq_<key-id>.<secret>`이다.
 - `<key-id>`는 canonical lowercase UUID다.
 - `<secret>`은 256-bit 난수의 unpadded base64url 문자열이다.
 - 누락·복수 Authorization header, 다른 scheme, malformed credential은 `401`이다.
 - `401` 응답에는 `WWW-Authenticate: Bearer`를 포함한다.
+- 세 credential은 서로 교환해 사용할 수 없다.
+- OpenAPI security scheme 이름은 `systemAdminBearer`, `projectApiKeyBearer`, `metricsBearer`로 구분한다.
 
 ### 2.5 Scope matrix
 
@@ -69,7 +76,9 @@ Authorization: Bearer <credential>
 | `GET /v1/audit-logs` | Project API Key | `audit:read` |
 | `GET /health/live` | 없음 | 없음 |
 | `GET /health/ready` | 없음 | 없음 |
-| `GET /metrics` | 없음, MVP에서는 private network 전제 | 없음 |
+| `GET /metrics` | Metrics token | 없음 |
+| `GET /docs` | 없음, `SWAGGER_ENABLED=true`일 때만 등록 | 없음 |
+| `GET /openapi.json` | 없음, `SWAGGER_ENABLED=true`일 때만 등록 | 없음 |
 
 유효한 Key가 필요 scope를 갖지 않으면 `403 INSUFFICIENT_SCOPE`다. Key가 가진 scope만 다른 Key에 발급할 수 있는 위임 모델은 사용하지 않는다. `keys:manage` 보유자는 허용된 네 scope의 임의 조합을 발급할 수 있다.
 
@@ -85,6 +94,8 @@ Authorization: Bearer <credential>
 6. domain invariant와 transaction 실행
 
 따라서 인증되지 않은 요청은 path UUID나 resource 존재 여부가 잘못되어도 먼저 `401`을 받는다. 다른 Project의 resource는 존재 여부를 숨기기 위해 `404`로 응답한다.
+
+모든 `/v1` endpoint는 endpoint별 `Errors` 목록과 별개로 `500 INTERNAL_ERROR`와 `503 DEPENDENCY_UNAVAILABLE`를 공통 상속한다. 생성된 OpenAPI에도 두 응답을 각 `/v1` operation에 명시한다. health probe는 이 공통 오류 계약을 상속하지 않는다. `POST /v1/usage-events`의 `503` OpenAPI response는 `DEPENDENCY_UNAVAILABLE`와 `CONCURRENT_REQUEST_RETRY_EXHAUSTED` Problem Details를 `oneOf`로 표현한다.
 
 ## 3. 공통 schema
 
@@ -291,7 +302,7 @@ Success `200`:
 }
 ```
 
-Errors: `400 INVALID_CURSOR`, `401 INVALID_API_KEY`, `403 INSUFFICIENT_SCOPE`, `503 DEPENDENCY_UNAVAILABLE`.
+Errors: `400 INVALID_CURSOR`, `401 INVALID_API_KEY`, `403 INSUFFICIENT_SCOPE`, `500 INTERNAL_ERROR`, `503 DEPENDENCY_UNAVAILABLE`.
 
 ### 4.4 `DELETE /v1/api-keys/{id}`
 
@@ -302,7 +313,7 @@ Path `id`는 canonical lowercase UUID다.
 - 현재 요청 인증에 사용한 Key: `409 CANNOT_REVOKE_CURRENT_KEY`
 - 다른 Project의 Key 또는 없는 Key: `404 RESOURCE_NOT_FOUND`
 
-Errors: `400 VALIDATION_ERROR`, `401 INVALID_API_KEY`, `403 INSUFFICIENT_SCOPE`, `404 RESOURCE_NOT_FOUND`, `409 CANNOT_REVOKE_CURRENT_KEY`, `503 DEPENDENCY_UNAVAILABLE`.
+Errors: `400 VALIDATION_ERROR`, `401 INVALID_API_KEY`, `403 INSUFFICIENT_SCOPE`, `404 RESOURCE_NOT_FOUND`, `409 CANNOT_REVOKE_CURRENT_KEY`, `500 INTERNAL_ERROR`, `503 DEPENDENCY_UNAVAILABLE`.
 
 ### 4.5 `POST /v1/usage-events`
 
@@ -410,7 +421,7 @@ Success `200`은 `usageDate ASC`로 정렬한다. `daily_usage` row가 없는 �
 }
 ```
 
-Errors: `400 VALIDATION_ERROR`, `401 INVALID_API_KEY`, `403 INSUFFICIENT_SCOPE`, `503 DEPENDENCY_UNAVAILABLE`.
+Errors: `400 VALIDATION_ERROR`, `401 INVALID_API_KEY`, `403 INSUFFICIENT_SCOPE`, `500 INTERNAL_ERROR`, `503 DEPENDENCY_UNAVAILABLE`.
 
 ### 4.7 `GET /v1/audit-logs`
 
@@ -446,7 +457,7 @@ Success `200`:
 
 DB는 polymorphic resource column을 사용하지 않는다. API mapper는 `PROJECT_CREATED`의 `resourceType=PROJECT`, `resourceId=projectId`를 만들고, Key action은 `resourceType=API_KEY`, `resourceId=resourceApiKeyId`를 만든다.
 
-Errors: `400 INVALID_CURSOR`, `401 INVALID_API_KEY`, `403 INSUFFICIENT_SCOPE`, `503 DEPENDENCY_UNAVAILABLE`.
+Errors: `400 INVALID_CURSOR`, `401 INVALID_API_KEY`, `403 INSUFFICIENT_SCOPE`, `500 INTERNAL_ERROR`, `503 DEPENDENCY_UNAVAILABLE`.
 
 ### 4.8 `GET /health/live`
 
@@ -472,15 +483,27 @@ PostgreSQL 연결과 migration 상태가 준비되면 `200`:
 {"status":"not_ready"}
 ```
 
-Probe 호환성을 위해 health endpoint는 Problem Details 예외다. 내부 DB 오류나 접속 문자열은 노출하지 않는다.
+준비 실패 `503`의 Content-Type은 `application/json`이고 body는 정확히 `{"status":"not_ready"}`다. 이 응답은 Problem Details의 유일한 예외지만 `X-Request-Id` response header는 반환한다. readiness 처리 중 예상하지 못한 `500 INTERNAL_ERROR`는 Problem Details를 사용한다. 내부 DB 오류나 접속 문자열은 노출하지 않는다.
 
 ### 4.10 `GET /metrics`
 
 - Success: `200`
 - Content-Type: Prometheus client가 제공하는 text exposition content type
+- 인증: 모든 환경에서 `Authorization: Bearer <METRICS_TOKEN>`을 요구한다.
 - 원문 credential, Project ID, Key ID를 label이나 sample 값에 포함하지 않는다.
-- MVP에서는 인증 없이 제공하되 local 또는 private network 노출만 허용한다.
-- 공개 배포 시 reverse proxy 또는 별도 운영 인증 계층 뒤에 둬야 하며, 이는 MVP 외부 인프라 범위다.
+- token은 최소 256-bit 난수이며 `SYSTEM_ADMIN_TOKEN`, Project API Key와 별개다.
+- token 누락·형식 오류·불일치는 `401 INVALID_METRICS_TOKEN`, `WWW-Authenticate: Bearer`와 Problem Details를 반환한다.
+- private network 배치는 추가 방어 수단으로 권장하지만, 공개 listener에서도 인증 없이 metric을 반환하지 않는다.
+
+Errors: `401 INVALID_METRICS_TOKEN`, `500 INTERNAL_ERROR`.
+
+### 4.11 API documentation
+
+- `SWAGGER_ENABLED=true`이면 `GET /docs`가 `200 text/html` Swagger UI를 반환한다.
+- 같은 설정에서 `GET /openapi.json`은 `200 application/json` OpenAPI 문서를 반환한다.
+- 두 endpoint는 인증을 요구하지 않으며 실제 credential, secret 값, 내부 연결 문자열을 포함하지 않는다.
+- Nest Swagger의 기본 raw route인 `/docs-json`, `/docs-yaml`은 등록하지 않는다. JSON 계약의 단일 경로는 `/openapi.json`이다.
+- `SWAGGER_ENABLED=false`이면 두 route를 등록하지 않고 `404 ROUTE_NOT_FOUND` Problem Details를 반환한다.
 
 ## 5. Error catalog
 
@@ -490,8 +513,10 @@ Probe 호환성을 위해 health endpoint는 Problem Details 예외다. 내부 D
 | 400 | `INVALID_CURSOR` | cursor decoding 또는 schema 실패 |
 | 401 | `INVALID_SYSTEM_ADMIN_TOKEN` | 관리자 token 누락·불일치 |
 | 401 | `INVALID_API_KEY` | API Key 누락·형식·digest·폐기 상태 오류 |
+| 401 | `INVALID_METRICS_TOKEN` | metric 운영 token 누락·형식·불일치 |
 | 403 | `INSUFFICIENT_SCOPE` | 필요 scope 없음 |
 | 404 | `RESOURCE_NOT_FOUND` | 현재 tenant에서 resource 없음 |
+| 404 | `ROUTE_NOT_FOUND` | 등록되지 않았거나 설정으로 비활성화한 route |
 | 409 | `IDEMPOTENCY_KEY_REUSED` | 같은 key와 다른 payload |
 | 409 | `CANNOT_REVOKE_CURRENT_KEY` | 현재 인증 Key 자체 폐기 시도 |
 | 409 | `ACTIVE_KEY_LIMIT_REACHED` | 활성 Key 20개 상한 |
@@ -511,5 +536,10 @@ Probe 호환성을 위해 health endpoint는 Problem Details 예외다. 내부 D
 6. usage `200`과 `429`의 quota body와 header가 일치한다.
 7. 같은 idempotency key 100회 replay가 같은 terminal result를 반환한다.
 8. 다른 payload 충돌이 `409`이며 quota를 추가 차감하지 않는다.
-9. 모든 오류의 Content-Type, Problem Details 필수 field, request ID를 검증한다.
-10. health와 metrics가 secret 또는 상세 dependency 오류를 노출하지 않는다.
+9. health probe를 제외한 모든 오류의 Content-Type, Problem Details 필수 field, request ID를 검증한다.
+10. health가 probe JSON 계약을 지키고 health와 metrics가 secret 또는 상세 dependency 오류를 노출하지 않는다.
+11. `/metrics`가 token 없이 `401`이고 올바른 `METRICS_TOKEN`으로만 Prometheus text를 반환하는지 검증한다.
+12. `SWAGGER_ENABLED=false`에서는 `/docs`와 `/openapi.json`이 `404`이고 활성화 상태의 문서에 secret 값이 없는지 검증한다.
+13. 모든 `/v1` operation의 OpenAPI에 `500 INTERNAL_ERROR`와 `503 DEPENDENCY_UNAVAILABLE`가 포함되는지 검증한다.
+14. usage `503` OpenAPI schema가 `DEPENDENCY_UNAVAILABLE`와 `CONCURRENT_REQUEST_RETRY_EXHAUSTED`를 모두 표현하는지 검증한다.
+15. `/docs-json`과 `/docs-yaml`이 항상 `404 ROUTE_NOT_FOUND`인지 검증한다.

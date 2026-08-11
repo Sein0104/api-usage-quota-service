@@ -2,7 +2,7 @@
 
 ## 1. 문서 지위
 
-이 문서는 PostgreSQL schema, Prisma mapping, migration, transaction 구현의 기준이다. HTTP 표현은 [`2026-08-11-api-contract-spec.md`](./2026-08-11-api-contract-spec.md), 상위 설계와 범위는 [`2026-08-11-api-usage-quota-service-design.md`](./2026-08-11-api-usage-quota-service-design.md)를 따른다.
+이 문서는 PostgreSQL schema, Prisma mapping, migration, transaction 구현의 기준이다. HTTP 표현은 [`api-contract.md`](./api-contract.md), 상위 설계와 범위는 [`service-design.md`](../architecture/service-design.md)를 따른다.
 
 실제 `prisma/schema.prisma`와 migration SQL은 이 문서의 제약을 모두 구현해야 한다. Prisma schema로 표현할 수 없는 `CHECK`, partial index, 일부 복합 FK는 생성된 migration SQL을 명시적으로 편집해 추가한다.
 

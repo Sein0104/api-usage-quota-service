@@ -3,8 +3,10 @@
 ## 문서 관계
 
 - 이 문서: 범위, 아키텍처, 보장과 trade-off
-- [`API Contract`](./2026-08-11-api-contract-spec.md): HTTP 인증, DTO, 성공·오류 schema, pagination, idempotency replay
-- [`Database Schema`](./2026-08-11-database-schema-spec.md): PostgreSQL type, constraint, FK, index, transaction, Prisma/raw SQL 경계
+- [`API Contract`](../specs/api-contract.md): HTTP 인증, DTO, 성공·오류 schema, pagination, idempotency replay
+- [`Database Schema`](../specs/database-schema.md): PostgreSQL type, constraint, FK, index, transaction, Prisma/raw SQL 경계
+- [`Implementation Plan`](../plans/implementation-plan.md): TDD 순서, 파일 경계, 검증 명령, PR 단위
+- [`CONTRIBUTING`](../../CONTRIBUTING.md): Issue·Branch·Commit·PR·release 운영 규칙
 
 세 문서가 충돌하면 구현을 시작하기 전에 함께 수정한다. 실제 dependency patch version은 `package.json`과 lockfile, 실행 이미지는 Docker tag/digest, 실제 schema는 review된 migration을 단일 진실 공급원으로 사용한다.
 
@@ -63,9 +65,9 @@
 - Framework: NestJS 11, Express adapter
 - Database: PostgreSQL 18
 - Data access: Prisma ORM 7과 `@prisma/adapter-pg`를 사용하되, 쿼터의 조건부 원자 갱신은 명시적 SQL로 구현
-- API documentation: NestJS Swagger
+- API documentation: NestJS Swagger. UI는 `/docs`, JSON은 `/openapi.json`이며 `SWAGGER_ENABLED`로 route 등록을 제어
 - Tests: Jest, Supertest, Testcontainers
-- Metrics: Prometheus 형식의 `/metrics`
+- Metrics: 운영 Bearer token으로 보호한 Prometheus 형식의 `/metrics`
 - Local environment: Docker, Docker Compose
 - CI: GitHub Actions
 
@@ -87,7 +89,7 @@
 - lint와 format은 ESLint·Prettier를 사용하고 CI는 `format:check`, `lint`, `typecheck`를 별도 실행한다.
 - 기본 HTTP port는 `3000`이며 Nest shutdown hook으로 graceful shutdown한다.
 
-필수 환경 변수는 `NODE_ENV`, `PORT`, `DATABASE_URL`, `SYSTEM_ADMIN_TOKEN`, `API_KEY_PEPPER`, `LOG_LEVEL`, `TZ=UTC`다. 두 secret은 최소 256-bit 난수여야 하며 validation 실패 시 server를 시작하지 않는다. 실제 값은 `.env`, 로그, example 파일, Git에 기록하지 않는다.
+필수 환경 변수는 `NODE_ENV`, `PORT`, `DATABASE_URL`, `SYSTEM_ADMIN_TOKEN`, `API_KEY_PEPPER`, `METRICS_TOKEN`, `LOG_LEVEL`, `TZ=UTC`다. `NODE_ENV`는 `development`, `test`, `production`만 허용한다. 세 secret은 각각 최소 256-bit 난수여야 하며 validation 실패 시 server를 시작하지 않는다. `SWAGGER_ENABLED`는 boolean이고 development·test 기본값은 `true`, production 기본값은 `false`다. 실제 secret 값은 `.env`, 로그, example 파일, Git에 기록하지 않는다.
 
 기준 major는 2026-08-11의 공식 지원 상태를 따른다: [Node.js 24 LTS](https://nodejs.org/en/about/previous-releases), [NestJS 11 release](https://github.com/nestjs/nest/releases), [Prisma ORM 7](https://www.prisma.io/docs/orm), [PostgreSQL 18](https://www.postgresql.org/docs/18/).
 
@@ -157,6 +159,7 @@ PostgreSQL
 - JSON 구조화 로그
 - Prometheus 메트릭
 - liveness와 readiness endpoint
+- `/metrics` 전용 `METRICS_TOKEN` Bearer 인증과 constant-time 비교
 
 ## 5. 데이터 모델
 
@@ -239,7 +242,7 @@ MVP는 PostgreSQL RLS를 사용하지 않는다. tenant 접근 권한은 인증�
 
 ## 6. API 계약
 
-일반 JSON API 오류는 RFC 9457 Problem Details 형식을 따르며 `type`, `title`, `status`, `detail`, `code`, `requestId`를 포함한다. 쿼터 거절에는 `eventId`, `usageDate`, quota snapshot을 extension으로 추가한다. 단순한 container probe 호환성을 위해 health endpoint의 `503`은 `{"status":"not_ready"}` 예외를 사용한다.
+모든 `/v1` API 오류, `/metrics` 인증 오류와 등록되지 않은 route 오류는 RFC 9457 Problem Details 형식을 따르며 `type`, `title`, `status`, `detail`, `code`, `requestId`를 포함한다. 모든 `/v1` endpoint는 예상하지 못한 오류의 `500 INTERNAL_ERROR`와 PostgreSQL 사용 불가의 `503 DEPENDENCY_UNAVAILABLE`를 공통으로 가질 수 있다. 쿼터 거절에는 `eventId`, `usageDate`, quota snapshot을 extension으로 추가한다. 유일한 비-Problem 오류는 container probe 호환성을 위한 `/health/ready`의 준비 실패 `503`이며 `{"status":"not_ready"}`를 사용한다.
 
 ### 시스템 관리
 
@@ -314,7 +317,11 @@ Key 생성은 Project row를 `FOR UPDATE`로 잠근 트랜잭션에서 활성 Ke
 
 - `GET /health/live`: 프로세스 생존 여부
 - `GET /health/ready`: PostgreSQL 연결과 migration 상태
-- `GET /metrics`: Prometheus 형식 메트릭
+- `GET /metrics`: `Authorization: Bearer <METRICS_TOKEN>` 인증 후 Prometheus 형식 메트릭
+- `GET /docs`: `SWAGGER_ENABLED=true`일 때 Swagger UI
+- `GET /openapi.json`: `SWAGGER_ENABLED=true`일 때 OpenAPI JSON
+
+Swagger는 development·test에서 기본 활성화하고 production에서는 기본 비활성화한다. production에서 포트폴리오 데모로 공개할 때만 환경 변수로 명시적으로 활성화하며 문서에는 secret 값이나 내부 연결 문자열을 포함하지 않는다. 비활성화 상태에서는 두 경로 모두 `404 ROUTE_NOT_FOUND` Problem Details다.
 
 ## 7. 사용량 처리 알고리즘
 
@@ -368,6 +375,7 @@ RETURNING used_units, limit_units;
 - 폐기된 Key로 시작한 새 요청은 `401`이다.
 - 폐기와 동시에 이미 트랜잭션을 시작한 요청은 완료될 수 있다. MVP는 폐기 시점 이전에 인증을 완료한 in-flight 요청을 강제 취소하지 않는다.
 - 시스템 관리자 토큰은 Project 부트스트랩에만 사용하고 일반 데이터 API에는 사용할 수 없으며 로그에도 기록하지 않는다.
+- `METRICS_TOKEN`은 `/metrics`에서만 사용하며 시스템 관리자 토큰이나 Project API Key를 대신할 수 없다.
 
 ## 9. 오류 처리
 
@@ -377,8 +385,10 @@ RETURNING used_units, limit_units;
 | 400 | `INVALID_CURSOR` | cursor decoding 또는 schema 오류 |
 | 401 | `INVALID_SYSTEM_ADMIN_TOKEN` | 관리자 token 누락·불일치 |
 | 401 | `INVALID_API_KEY` | 누락·형식 오류·digest 불일치·폐기된 Key |
+| 401 | `INVALID_METRICS_TOKEN` | 운영 metric token 누락·불일치 |
 | 403 | `INSUFFICIENT_SCOPE` | 필요한 scope 없음 |
 | 404 | `RESOURCE_NOT_FOUND` | 현재 Project 문맥에서 대상 없음 |
+| 404 | `ROUTE_NOT_FOUND` | 등록되지 않은 route 또는 비활성화한 Swagger route |
 | 409 | `IDEMPOTENCY_KEY_REUSED` | 동일 키와 다른 payload |
 | 409 | `CANNOT_REVOKE_CURRENT_KEY` | 현재 요청을 인증한 Key 자체를 폐기하려 함 |
 | 409 | `ACTIVE_KEY_LIMIT_REACHED` | Project의 활성 Key가 20개 |
@@ -467,6 +477,8 @@ RETURNING used_units, limit_units;
 
 Project ID와 Key ID는 고카디널리티이므로 metric label에 넣지 않는다. `route`, `reason`, `decision`, `transaction` 값은 코드에 정의한 유한한 allowlist만 사용한다.
 
+`/metrics`는 일반 API Key가 아니라 별도 `METRICS_TOKEN`을 Bearer credential로 사용한다. token은 constant-time으로 비교하고 `Authorization` header와 token 원문을 로그에 남기지 않는다. 따라서 단일 공개 listener로 배포해도 인증 없이 metric이 노출되지 않으며, private network 제한은 추가 방어 수단이지 유일한 통제 수단이 아니다.
+
 ### 상태 점검
 
 - liveness는 외부 의존성을 확인하지 않는다.
@@ -505,6 +517,7 @@ Project ID와 Key ID는 고카디널리티이므로 metric label에 넣지 않�
 저장소에는 다음 문서를 포함한다.
 
 - README: 문제, 실행법, 보장 범위, 데모 명령
+- Implementation Plan: 구현 순서, 고정 interface, TDD와 PR 경계
 - API Contract: 요청·응답·오류·pagination·멱등 replay 계약
 - Database Schema: type·constraint·FK·index·transaction 계약
 - OpenAPI 문서
@@ -545,4 +558,4 @@ Project ID와 Key ID는 고카디널리티이므로 metric label에 넣지 않�
 - 결과: 실제 허용·거절 건수, p95, 실행계획 개선 결과
 - 운영: Docker, CI, 구조화 로그, metric, 문서화
 
-이 프로젝트는 PILO에서 다룬 멱등성·동시성 사고를 다시 주장하는 데 그치지 않고, 이를 개인 소유의 HTTP API·tenant 모델·보안·자동화 테스트·운영 산출물로 독립 검증하는 역할을 한다.
+이 프로젝트는 기존 팀 프로젝트에서 다룬 멱등성·동시성 경험을 반복해서 주장하는 데 그치지 않고, 이를 개인 소유의 HTTP API·tenant 모델·보안·자동화 테스트·운영 산출물로 독립 검증하는 역할을 한다.
