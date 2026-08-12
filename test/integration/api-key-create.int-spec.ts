@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { Buffer } from 'node:buffer';
 import { beforeEach, jest } from '@jest/globals';
 import { Pool } from 'pg';
 import { ApiKeyCredentialService } from '../../src/api-keys/api-key-credential.service.js';
@@ -93,7 +94,10 @@ describe('API key creation transaction', () => {
     ]);
     expect(JSON.stringify(audit.rows)).not.toContain(created.plaintext);
     expect(JSON.stringify(audit.rows)).not.toContain(
-      created.apiKey.secretDigest?.toString(),
+      Buffer.from(created.apiKey.secretDigest).toString('base64'),
+    );
+    expect(JSON.stringify(audit.rows).toLowerCase()).not.toContain(
+      'secretdigest',
     );
     expect(JSON.stringify(audit.rows).toLowerCase()).not.toContain(
       'authorization',

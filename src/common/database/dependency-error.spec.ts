@@ -31,6 +31,13 @@ describe('isDatabaseDependencyError', () => {
     },
   );
 
+  it.each(['08001', '08004', '08007', '08P01'])(
+    'recognizes direct SQLSTATE connection exception class %s',
+    (code) => {
+      expect(isDatabaseDependencyError({ code })).toBe(true);
+    },
+  );
+
   it.each([
     [
       {
@@ -45,6 +52,11 @@ describe('isDatabaseDependencyError', () => {
       },
     ],
     [{ code: 'P2002' }],
+    [{ code: '0800' }],
+    [{ code: '080011' }],
+    [{ code: '08p01' }],
+    [{ code: '42601' }],
+    [{ code: '23505' }],
     [
       {
         code: 'P2010',

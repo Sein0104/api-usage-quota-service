@@ -14,7 +14,12 @@ export function isDatabaseDependencyError(error: unknown): boolean {
   if (typeof error !== 'object' || error === null || !('code' in error))
     return false;
   const code = String(error.code);
-  if (directCodes.has(code) || connectionCodes.has(code)) return true;
+  if (
+    directCodes.has(code) ||
+    connectionCodes.has(code) ||
+    sqlStateConnectionException.test(code)
+  )
+    return true;
   if (code !== 'P2010' && code !== 'P2039') return false;
   const originalCode = (
     error as {

@@ -183,7 +183,12 @@ describe('POST /v1/api-keys', () => {
     expect(malformed.headers['www-authenticate']).toBeUndefined();
     expect(malformed.body.requestId).toBe(malformed.headers['x-request-id']);
 
-    const wrongSecret = `${managerSecret.slice(0, -1)}${managerSecret.endsWith('A') ? 'B' : 'A'}`;
+    const credentialPrefix = managerSecret.slice(
+      0,
+      managerSecret.indexOf('.') + 1,
+    );
+    const secretPart = managerSecret.slice(credentialPrefix.length);
+    const wrongSecret = `${credentialPrefix}${secretPart.startsWith('A') ? 'B' : 'A'}${secretPart.slice(1)}`;
     const wrongSecretResponse = await request(app.getHttpServer())
       .post('/v1/api-keys')
       .set('Authorization', `Bearer ${wrongSecret}`)

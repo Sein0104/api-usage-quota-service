@@ -74,16 +74,23 @@ describe('ApiKeyAuthService', () => {
   );
 
   it('rejects a wrong secret for an existing id with the same credential problem', async () => {
-    const wrong = `mq_${id}.${'B'.repeat(43)}`;
-    const auth = service({
+    const wrong = `mq_${id}.BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA`;
+    const findFirst = jest.fn<() => Promise<unknown>>().mockResolvedValue({
       id,
       projectId: id,
       scopes: ['usage:read'],
       secretDigest: Buffer.alloc(32, 1),
     });
+    const auth = new ApiKeyAuthService(
+      { apiKey: { findFirst } } as never,
+      { digest: jest.fn().mockReturnValue(Buffer.alloc(32)) } as never,
+    );
     await expect(auth.authenticate(wrong)).rejects.toMatchObject({
       problem: { code: 'INVALID_API_KEY' },
     });
+    expect(findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id, status: 'ACTIVE' } }),
+    );
   });
 
   it('calculates a candidate digest even when the key id is unknown', async () => {
