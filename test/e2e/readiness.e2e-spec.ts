@@ -4,6 +4,7 @@ import request from 'supertest';
 import { AppModule } from '../../src/app.module.js';
 import { MigrationStatusService } from '../../src/database/migration-status.service.js';
 import { configureApplication } from '../../src/main.js';
+import { testEnvironment } from '../support/test-environment.js';
 
 describe('readiness HTTP contract', () => {
   let app: INestApplication;
@@ -11,7 +12,9 @@ describe('readiness HTTP contract', () => {
   async function startWithReadiness(
     readiness: () => Promise<boolean>,
   ): Promise<void> {
-    const module = await Test.createTestingModule({ imports: [AppModule] })
+    const module = await Test.createTestingModule({
+      imports: [AppModule.forRoot(testEnvironment())],
+    })
       .overrideProvider(MigrationStatusService)
       .useValue({ isReady: readiness })
       .compile();

@@ -1,8 +1,6 @@
 import { Pool } from 'pg';
 
-export function createPostgresPool(
-  databaseUrl = process.env.DATABASE_URL,
-): Pool {
+export function createPostgresPool(databaseUrl: string): Pool {
   return new Pool({
     connectionString: databaseUrl,
     connectionTimeoutMillis: 3_000,

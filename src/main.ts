@@ -5,14 +5,19 @@ import {
   type ValidationError,
 } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { NextFunction, Request, Response } from 'express';
 import { pathToFileURL } from 'node:url';
 import { AppModule } from './app.module.js';
-import { JsonContentTypeGuard } from './common/http/json-content-type.guard.js';
 import { ProblemDetailsFilter } from './common/http/problem-details.filter.js';
 import { ProblemCode } from './common/http/problem-code.js';
 import { ProblemException } from './common/http/problem.exception.js';
 import { requestIdMiddleware } from './common/http/request-id.middleware.js';
 import { validateEnvironment } from './config/environment.schema.js';
+import { SystemAdminAuthenticator } from './system-admin/system-admin-authenticator.service.js';
+import {
+  isSystemAdminProjectBootstrapRequest,
+  isUnregisteredSystemAdminProjectDescendant,
+} from './system-admin/system-admin-route.matcher.js';
 
 function toValidationErrors(
   errors: ValidationError[],
@@ -25,6 +30,27 @@ function toValidationErrors(
 
 export function configureApplication(app: INestApplication): void {
   app.use(requestIdMiddleware);
+  // This unmounted matcher avoids Express prefix-mount semantics so only the
+  // real operation authenticates before JSON parsing; unknown routes stay 404.
+  app.use((request: Request, response: Response, next: NextFunction) => {
+    if (isSystemAdminProjectBootstrapRequest(request)) {
+      app.get(SystemAdminAuthenticator).middleware(request, response, next);
+      return;
+    }
+    // New descendants must be added to this classifier with their own policy.
+    if (isUnregisteredSystemAdminProjectDescendant(request)) {
+      next(
+        new ProblemException({
+          code: ProblemCode.ROUTE_NOT_FOUND,
+          detail: 'The requested route was not found.',
+          status: 404,
+          title: 'Route not found',
+        }),
+      );
+      return;
+    }
+    next();
+  });
   app.setGlobalPrefix('v1', {
     exclude: [
       { path: 'health/live', method: RequestMethod.GET },
@@ -46,13 +72,12 @@ export function configureApplication(app: INestApplication): void {
       whitelist: true,
     }),
   );
-  app.useGlobalGuards(new JsonContentTypeGuard());
   app.useGlobalFilters(new ProblemDetailsFilter());
 }
 
 async function bootstrap(): Promise<void> {
   const environment = validateEnvironment(process.env);
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule.forRoot(environment));
 
   configureApplication(app);
   app.enableShutdownHooks();

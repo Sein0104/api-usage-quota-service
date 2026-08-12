@@ -56,9 +56,16 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     }
 
     const problem = this.toProblem(exception);
+    for (const [name, value] of Object.entries(problem.headers ?? {})) {
+      response.setHeader(name, value);
+    }
     const body: ProblemDetails = {
-      ...problem,
+      code: problem.code,
+      detail: problem.detail,
+      errors: problem.errors,
       requestId,
+      status: problem.status,
+      title: problem.title,
       type: toProblemType(problem.code),
     };
 
