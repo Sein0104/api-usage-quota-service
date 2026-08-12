@@ -14,6 +14,8 @@ describe('API key route policy', () => {
     ['POST', '/v1/api-keys/'],
     ['GET', '/v1/api-keys?limit=10'],
     ['GET', '/v1/api-keys/'],
+    ['GET', '/v1/API-KEYS?cursor=broken'],
+    ['GET', '/v1/API-KEYS/?cursor=broken'],
     ['DELETE', '/v1/api-keys/11111111-2222-4333-8444-555555555555'],
   ])('authenticates the known %s %s operation', (method, url) => {
     expect(isApiKeyManagedRequest(request(method, url))).toBe(true);
@@ -26,7 +28,6 @@ describe('API key route policy', () => {
     ['POST', '/v1/api-keys/a/b'],
     ['GET', '/v1/api-keys/a'],
     ['DELETE', '/v1/api-keys/a/b'],
-    ['GET', '/v1/API-KEYS'],
   ])(
     'returns an unauthenticated 404 policy for unknown %s %s',
     (method, url) => {

@@ -20,6 +20,24 @@ describe('CursorCodec', () => {
   });
 
   it.each([
+    { createdAt: new Date(Number.NaN), id: cursorValue.id },
+    {
+      createdAt: cursorValue.createdAt,
+      id: '11111111-2222-4333-8444-55555555555A',
+    },
+    { createdAt: cursorValue.createdAt, id: 'not-a-uuid' },
+  ])('rejects a non-canonical value before encoding: %o', (value) => {
+    expect(() => codec.encode(value)).toThrow(
+      expect.objectContaining({
+        problem: expect.objectContaining({
+          code: 'INVALID_CURSOR',
+          status: 400,
+        }),
+      }),
+    );
+  });
+
+  it.each([
     '',
     'broken=',
     'broken+',

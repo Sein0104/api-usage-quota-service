@@ -15,10 +15,11 @@ const uuidPattern =
 
 export class CursorCodec {
   encode(cursor: CursorValue): string {
+    const canonical = validateCursorValue(cursor);
     const payload = JSON.stringify({
       v: 1,
-      createdAt: cursor.createdAt.toISOString(),
-      id: cursor.id,
+      createdAt: canonical.createdAt.toISOString(),
+      id: canonical.id,
     });
     return Buffer.from(payload, 'utf8').toString('base64url');
   }
@@ -36,28 +37,52 @@ export class CursorCodec {
         !Object.hasOwn(value, 'v') ||
         !Object.hasOwn(value, 'createdAt') ||
         !Object.hasOwn(value, 'id') ||
-        value.v !== 1 ||
-        typeof value.createdAt !== 'string' ||
-        typeof value.id !== 'string' ||
-        !timestampPattern.test(value.createdAt) ||
-        !uuidPattern.test(value.id)
+        value.v !== 1
       ) {
         throw new Error('schema');
       }
-      const createdAt = new Date(value.createdAt);
-      if (
-        Number.isNaN(createdAt.getTime()) ||
-        createdAt.toISOString() !== value.createdAt
-      ) {
-        throw new Error('timestamp');
-      }
-      const decoded = { createdAt, id: value.id };
+      const decoded = validateCursorValue({
+        createdAt: value.createdAt,
+        id: value.id,
+      });
       if (this.encode(decoded) !== encoded) throw new Error('canonical');
       return decoded;
     } catch {
       throw invalidCursor();
     }
   }
+}
+
+function validateCursorValue(value: unknown): CursorValue {
+  if (!isPlainObject(value) || typeof value.id !== 'string') {
+    throw invalidCursor();
+  }
+
+  let createdAt: Date;
+  let sourceTimestamp: string;
+  if (value.createdAt instanceof Date) {
+    createdAt = value.createdAt;
+    try {
+      sourceTimestamp = createdAt.toISOString();
+    } catch {
+      throw invalidCursor();
+    }
+  } else if (typeof value.createdAt === 'string') {
+    sourceTimestamp = value.createdAt;
+    createdAt = new Date(sourceTimestamp);
+  } else {
+    throw invalidCursor();
+  }
+
+  if (
+    !timestampPattern.test(sourceTimestamp) ||
+    Number.isNaN(createdAt.getTime()) ||
+    createdAt.toISOString() !== sourceTimestamp ||
+    !uuidPattern.test(value.id)
+  ) {
+    throw invalidCursor();
+  }
+  return { createdAt, id: value.id };
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

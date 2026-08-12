@@ -82,7 +82,12 @@ describe('API key list and revoke transactions', () => {
       { name: 'other-tenant', scopes: ['usage:read'] },
       { requestId: randomUUID() },
     );
+    const actorTimestamp = new Date('2026-08-12T12:34:55.789Z');
     const timestamp = new Date('2026-08-12T12:34:56.789Z');
+    await prisma.apiKey.update({
+      data: { createdAt: actorTimestamp },
+      where: { id: actor.id },
+    });
     await prisma.apiKey.updateMany({
       data: { createdAt: timestamp },
       where: { id: { in: created.map(({ apiKey }) => apiKey.id) } },
@@ -102,12 +107,12 @@ describe('API key list and revoke transactions', () => {
     );
 
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids).toEqual(
-      [...created.map(({ apiKey }) => apiKey.id)]
-        .sort()
-        .reverse()
-        .concat(actor.id),
-    );
+    const expectedIds = created
+      .map(({ apiKey }) => apiKey.id)
+      .sort()
+      .reverse()
+      .concat(actor.id);
+    expect(ids).toEqual(expectedIds);
     expect(ids).not.toContain(other.id);
     expect(third.nextCursor).toBeNull();
     expect(JSON.stringify([first, second, third]).toLowerCase()).not.toContain(
@@ -129,6 +134,9 @@ describe('API key list and revoke transactions', () => {
       requestId: randomUUID(),
     });
 
+    const page = await service().list(actor, { cursor: null, limit: 50 });
+    const revokedItem = page.items.find((item) => item.id === target.apiKey.id);
+
     const key = await prisma.apiKey.findUniqueOrThrow({
       where: { id: target.apiKey.id },
     });
@@ -137,6 +145,24 @@ describe('API key list and revoke transactions', () => {
     });
     expect(key.status).toBe('REVOKED');
     expect(key.revokedAt).toBeInstanceOf(Date);
+    expect(revokedItem).toEqual({
+      id: target.apiKey.id,
+      name: 'target',
+      prefix: target.apiKey.prefix,
+      scopes: ['usage:read'],
+      status: 'REVOKED',
+      createdAt: target.apiKey.createdAt.toISOString(),
+      revokedAt: key.revokedAt!.toISOString(),
+    });
+    expect(Object.keys(revokedItem!)).toEqual([
+      'id',
+      'name',
+      'prefix',
+      'scopes',
+      'status',
+      'createdAt',
+      'revokedAt',
+    ]);
     expect(audits).toEqual([
       expect.objectContaining({
         actorKeyId: actor.id,
@@ -150,6 +176,8 @@ describe('API key list and revoke transactions', () => {
     expect(JSON.stringify(audits)).not.toContain(
       Buffer.from(target.apiKey.secretDigest).toString('base64'),
     );
+    expect(JSON.stringify(revokedItem).toLowerCase()).not.toContain('secret');
+    expect(JSON.stringify(revokedItem).toLowerCase()).not.toContain('digest');
   });
 
   it('rejects current, cross-tenant, and nonexistent keys without writing or auditing', async () => {

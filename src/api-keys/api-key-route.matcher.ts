@@ -6,7 +6,7 @@ interface RequestTarget {
 const collectionPaths = new Set(['/v1/api-keys', '/v1/api-keys/']);
 
 function pathOf(request: RequestTarget): string {
-  return request.originalUrl.split('?', 1)[0];
+  return request.originalUrl.split('?', 1)[0].toLowerCase();
 }
 
 export function isApiKeyCreateRequest(request: RequestTarget): boolean {
@@ -38,7 +38,6 @@ export function isUnregisteredApiKeyRoute(request: RequestTarget): boolean {
   const path = pathOf(request);
   return (
     !isApiKeyManagedRequest(request) &&
-    (path.toLowerCase() === '/v1/api-keys' ||
-      path.toLowerCase().startsWith('/v1/api-keys/'))
+    (path === '/v1/api-keys' || path.startsWith('/v1/api-keys/'))
   );
 }

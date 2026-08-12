@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import { beforeEach, jest } from '@jest/globals';
-import { Pool } from 'pg';
+import { Pool, type PoolClient } from 'pg';
 import { ApiKeyCredentialService } from '../../src/api-keys/api-key-credential.service.js';
 import { ApiKeysRepository } from '../../src/api-keys/api-keys.repository.js';
 import { ApiKeysService } from '../../src/api-keys/api-keys.service.js';
@@ -13,6 +14,55 @@ import { cleanDatabase } from '../support/database-cleaner.js';
 import { createPostgresTestHarness } from '../support/postgres-test-harness.js';
 
 jest.setTimeout(120_000);
+
+interface TrackedPromise<T> {
+  promise: Promise<T>;
+  state(): 'pending' | 'fulfilled' | 'rejected';
+}
+
+function track<T>(promise: Promise<T>): TrackedPromise<T> {
+  let current: ReturnType<TrackedPromise<T>['state']> = 'pending';
+  void promise.then(
+    () => {
+      current = 'fulfilled';
+    },
+    () => {
+      current = 'rejected';
+    },
+  );
+  return { promise, state: () => current };
+}
+
+async function waitForBlockedQueries(
+  pool: Pool,
+  matches: (queries: string[]) => boolean,
+): Promise<string[]> {
+  let observed: string[] = [];
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const result = await pool.query<{ query: string }>(`
+      SELECT query
+      FROM pg_stat_activity
+      WHERE datname = current_database()
+        AND pid <> pg_backend_pid()
+        AND state = 'active'
+        AND wait_event_type = 'Lock'
+    `);
+    observed = result.rows.map(({ query }) => query);
+    if (matches(observed)) return observed;
+    await delay(20);
+  }
+  throw new Error(
+    `Expected blocked queries were not observed: ${observed.join(' | ')}`,
+  );
+}
+
+async function releaseBarrier(
+  client: PoolClient,
+  outcome: 'commit' | 'rollback',
+): Promise<void> {
+  await client.query(outcome === 'commit' ? 'COMMIT' : 'ROLLBACK');
+  client.release();
+}
 
 describe('API key revoke concurrency', () => {
   const harness = createPostgresTestHarness();
@@ -84,8 +134,13 @@ describe('API key revoke concurrency', () => {
       { requestId: randomUUID() },
     );
 
-    await Promise.all(
-      Array.from({ length: 12 }, (_, index) =>
+    const barrier = await setupPool.connect();
+    await barrier.query('BEGIN');
+    await barrier.query('SELECT id FROM api_keys WHERE id = $1 FOR UPDATE', [
+      target.apiKey.id,
+    ]);
+    const revokes = Array.from({ length: 12 }, (_, index) =>
+      track(
         service(index % 2 === 0 ? firstPrisma : secondPrisma).revoke(
           principal,
           target.apiKey.id,
@@ -93,6 +148,29 @@ describe('API key revoke concurrency', () => {
         ),
       ),
     );
+    try {
+      const blocked = await waitForBlockedQueries(setupPool, (queries) => {
+        const normalized = queries.map((query) => query.toLowerCase());
+        return (
+          normalized.some((query) => query.includes('from api_keys')) &&
+          normalized.some((query) => query.includes('from projects'))
+        );
+      });
+      const normalized = blocked.map((query) => query.toLowerCase());
+      expect(normalized.some((query) => query.includes('from api_keys'))).toBe(
+        true,
+      );
+      expect(normalized.some((query) => query.includes('from projects'))).toBe(
+        true,
+      );
+      expect(revokes.every(({ state }) => state() === 'pending')).toBe(true);
+      await releaseBarrier(barrier, 'commit');
+    } catch (error) {
+      await releaseBarrier(barrier, 'rollback');
+      throw error;
+    }
+
+    await Promise.all(revokes.map(({ promise }) => promise));
 
     await expect(
       setupPrisma.auditLog.count({
@@ -118,15 +196,47 @@ describe('API key revoke concurrency', () => {
       );
     }
 
-    const [createResult, revokeResult] = await Promise.allSettled([
+    const barrier = await setupPool.connect();
+    await barrier.query('BEGIN');
+    await barrier.query('SELECT id FROM projects WHERE id = $1 FOR UPDATE', [
+      principal.projectId,
+    ]);
+    const create = track(
       service(firstPrisma).create(
         principal,
         { name: 'replacement', scopes: ['usage:read'] },
         { requestId: randomUUID() },
       ),
+    );
+    const revoke = track(
       service(secondPrisma).revoke(principal, targets[0].apiKey.id, {
         requestId: randomUUID(),
       }),
+    );
+    try {
+      const blocked = await waitForBlockedQueries(
+        setupPool,
+        (queries) =>
+          queries.filter((query) =>
+            query.toLowerCase().includes('from projects'),
+          ).length >= 2,
+      );
+      expect(
+        blocked.filter((query) =>
+          query.toLowerCase().includes('from projects'),
+        ),
+      ).toHaveLength(2);
+      expect(create.state()).toBe('pending');
+      expect(revoke.state()).toBe('pending');
+      await releaseBarrier(barrier, 'commit');
+    } catch (error) {
+      await releaseBarrier(barrier, 'rollback');
+      throw error;
+    }
+
+    const [createResult, revokeResult] = await Promise.allSettled([
+      create.promise,
+      revoke.promise,
     ]);
     const activeCount = await setupPrisma.apiKey.count({
       where: { projectId: principal.projectId, status: 'ACTIVE' },
@@ -134,13 +244,39 @@ describe('API key revoke concurrency', () => {
 
     expect(activeCount).toBeLessThanOrEqual(20);
     expect(revokeResult.status).toBe('fulfilled');
+    await expect(
+      setupPrisma.apiKey.findUniqueOrThrow({
+        where: { id: targets[0].apiKey.id },
+      }),
+    ).resolves.toMatchObject({
+      status: 'REVOKED',
+      revokedAt: expect.any(Date),
+    });
+    await expect(
+      setupPrisma.auditLog.count({
+        where: {
+          action: 'API_KEY_REVOKED',
+          resourceApiKeyId: targets[0].apiKey.id,
+        },
+      }),
+    ).resolves.toBe(1);
+    const replacement = await setupPrisma.apiKey.findFirst({
+      where: { name: 'replacement', projectId: principal.projectId },
+    });
+    const createdAuditCount = await setupPrisma.auditLog.count({
+      where: { action: 'API_KEY_CREATED', projectId: principal.projectId },
+    });
     if (createResult.status === 'rejected') {
       expect(createResult.reason).toMatchObject({
         problem: { code: 'ACTIVE_KEY_LIMIT_REACHED', status: 409 },
       });
       expect(activeCount).toBe(19);
+      expect(replacement).toBeNull();
+      expect(createdAuditCount).toBe(19);
     } else {
       expect(activeCount).toBe(20);
+      expect(replacement).toMatchObject({ status: 'ACTIVE' });
+      expect(createdAuditCount).toBe(20);
     }
   });
 });

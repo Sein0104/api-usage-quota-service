@@ -62,6 +62,11 @@ describe('API key list, revoke, and rotation lifecycle', () => {
     const noScope = await createKey('reader', ['usage:read']);
     const cases = [
       request(app.getHttpServer()).get('/v1/api-keys?limit=01'),
+      request(app.getHttpServer()).get('/v1/api-keys?cursor=broken'),
+      request(app.getHttpServer()).get('/v1/API-KEYS?cursor=broken'),
+      request(app.getHttpServer())
+        .get('/v1/api-keys?cursor=broken')
+        .set('Authorization', `Bearer ${systemAdminToken}`),
       request(app.getHttpServer()).delete('/v1/api-keys/not-a-uuid'),
     ];
     for (const response of await Promise.all(cases)) {
@@ -76,6 +81,12 @@ describe('API key list, revoke, and rotation lifecycle', () => {
     for (const response of await Promise.all([
       request(app.getHttpServer())
         .get('/v1/api-keys?limit=01')
+        .set('Authorization', `Bearer ${noScope.body.secret as string}`),
+      request(app.getHttpServer())
+        .get('/v1/api-keys?cursor=broken')
+        .set('Authorization', `Bearer ${noScope.body.secret as string}`),
+      request(app.getHttpServer())
+        .get('/v1/API-KEYS/?cursor=broken')
         .set('Authorization', `Bearer ${noScope.body.secret as string}`),
       request(app.getHttpServer())
         .delete('/v1/api-keys/not-a-uuid')
@@ -101,6 +112,23 @@ describe('API key list, revoke, and rotation lifecycle', () => {
         body: { code: 'VALIDATION_ERROR' },
       });
       expect(response.headers['www-authenticate']).toBeUndefined();
+    }
+
+    for (const path of [
+      '/v1/api-keys?cursor=broken',
+      '/v1/api-keys?cursor=',
+      '/v1/api-keys?cursor=broken&cursor=broken',
+      '/v1/API-KEYS/?cursor=broken',
+    ]) {
+      const response = await request(app.getHttpServer())
+        .get(path)
+        .set('Authorization', `Bearer ${managerSecret}`);
+      expect(response).toMatchObject({
+        status: 400,
+        body: { code: 'INVALID_CURSOR', requestId: expect.any(String) },
+      });
+      expect(response.headers['www-authenticate']).toBeUndefined();
+      expect(response.body.requestId).toBe(response.headers['x-request-id']);
     }
   });
 
