@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { beforeEach, jest } from '@jest/globals';
-import { Pool, type PoolClient } from 'pg';
+import { Pool } from 'pg';
 import { ApiKeyCredentialService } from '../../src/api-keys/api-key-credential.service.js';
 import { ApiKeysRepository } from '../../src/api-keys/api-keys.repository.js';
 import { ApiKeysService } from '../../src/api-keys/api-keys.service.js';
@@ -12,6 +12,7 @@ import { PrismaService } from '../../src/database/prisma.service.js';
 import { ProjectBootstrapService } from '../../src/projects/project-bootstrap.service.js';
 import { cleanDatabase } from '../support/database-cleaner.js';
 import { createPostgresTestHarness } from '../support/postgres-test-harness.js';
+import { observeBarrierAndSettle } from '../support/concurrency-barrier.js';
 
 jest.setTimeout(120_000);
 
@@ -54,14 +55,6 @@ async function waitForBlockedQueries(
   throw new Error(
     `Expected blocked queries were not observed: ${observed.join(' | ')}`,
   );
-}
-
-async function releaseBarrier(
-  client: PoolClient,
-  outcome: 'commit' | 'rollback',
-): Promise<void> {
-  await client.query(outcome === 'commit' ? 'COMMIT' : 'ROLLBACK');
-  client.release();
 }
 
 describe('API key revoke concurrency', () => {
@@ -148,29 +141,28 @@ describe('API key revoke concurrency', () => {
         ),
       ),
     );
-    try {
-      const blocked = await waitForBlockedQueries(setupPool, (queries) => {
-        const normalized = queries.map((query) => query.toLowerCase());
-        return (
-          normalized.some((query) => query.includes('from api_keys')) &&
-          normalized.some((query) => query.includes('from projects'))
-        );
-      });
-      const normalized = blocked.map((query) => query.toLowerCase());
-      expect(normalized.some((query) => query.includes('from api_keys'))).toBe(
-        true,
-      );
-      expect(normalized.some((query) => query.includes('from projects'))).toBe(
-        true,
-      );
-      expect(revokes.every(({ state }) => state() === 'pending')).toBe(true);
-      await releaseBarrier(barrier, 'commit');
-    } catch (error) {
-      await releaseBarrier(barrier, 'rollback');
-      throw error;
-    }
-
-    await Promise.all(revokes.map(({ promise }) => promise));
+    const outcomes = await observeBarrierAndSettle(
+      barrier,
+      revokes.map(({ promise }) => promise),
+      async () => {
+        const blocked = await waitForBlockedQueries(setupPool, (queries) => {
+          const normalized = queries.map((query) => query.toLowerCase());
+          return (
+            normalized.some((query) => query.includes('from api_keys')) &&
+            normalized.some((query) => query.includes('from projects'))
+          );
+        });
+        const normalized = blocked.map((query) => query.toLowerCase());
+        expect(
+          normalized.some((query) => query.includes('from api_keys')),
+        ).toBe(true);
+        expect(
+          normalized.some((query) => query.includes('from projects')),
+        ).toBe(true);
+        expect(revokes.every(({ state }) => state() === 'pending')).toBe(true);
+      },
+    );
+    expect(outcomes.every(({ status }) => status === 'fulfilled')).toBe(true);
 
     await expect(
       setupPrisma.auditLog.count({
@@ -213,31 +205,26 @@ describe('API key revoke concurrency', () => {
         requestId: randomUUID(),
       }),
     );
-    try {
-      const blocked = await waitForBlockedQueries(
-        setupPool,
-        (queries) =>
-          queries.filter((query) =>
+    const [createResult, revokeResult] = await observeBarrierAndSettle(
+      barrier,
+      [create.promise, revoke.promise],
+      async () => {
+        const blocked = await waitForBlockedQueries(
+          setupPool,
+          (queries) =>
+            queries.filter((query) =>
+              query.toLowerCase().includes('from projects'),
+            ).length >= 2,
+        );
+        expect(
+          blocked.filter((query) =>
             query.toLowerCase().includes('from projects'),
-          ).length >= 2,
-      );
-      expect(
-        blocked.filter((query) =>
-          query.toLowerCase().includes('from projects'),
-        ),
-      ).toHaveLength(2);
-      expect(create.state()).toBe('pending');
-      expect(revoke.state()).toBe('pending');
-      await releaseBarrier(barrier, 'commit');
-    } catch (error) {
-      await releaseBarrier(barrier, 'rollback');
-      throw error;
-    }
-
-    const [createResult, revokeResult] = await Promise.allSettled([
-      create.promise,
-      revoke.promise,
-    ]);
+          ),
+        ).toHaveLength(2);
+        expect(create.state()).toBe('pending');
+        expect(revoke.state()).toBe('pending');
+      },
+    );
     const activeCount = await setupPrisma.apiKey.count({
       where: { projectId: principal.projectId, status: 'ACTIVE' },
     });
