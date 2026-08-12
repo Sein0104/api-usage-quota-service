@@ -13,9 +13,34 @@ import {
   type ProblemExceptionOptions,
 } from './problem.exception.js';
 
-interface ProblemDetails extends ProblemExceptionOptions {
+interface ProblemDetails {
+  code: ProblemCode;
+  detail: string;
+  errors?: import('./problem.exception.js').ProblemError[];
+  [key: string]: unknown;
   requestId: string;
+  status: number;
+  title: string;
   type: string;
+}
+
+const extensionKeys = [
+  'eventId',
+  'decision',
+  'usageDate',
+  'units',
+  'quota',
+] as const;
+
+function safeExtensions(
+  extensions: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  if (extensions === undefined) return {};
+  return Object.fromEntries(
+    extensionKeys
+      .filter((key) => Object.hasOwn(extensions, key))
+      .map((key) => [key, extensions[key]]),
+  );
 }
 
 const problemByStatus: Partial<Record<number, ProblemExceptionOptions>> = {
@@ -60,6 +85,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       response.setHeader(name, value);
     }
     const body: ProblemDetails = {
+      ...safeExtensions(problem.extensions),
       code: problem.code,
       detail: problem.detail,
       errors: problem.errors,
