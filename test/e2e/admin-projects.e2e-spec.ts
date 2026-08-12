@@ -153,6 +153,70 @@ describe('POST /v1/admin/projects', () => {
     );
   });
 
+  it('does not authenticate unregistered methods or descendant paths', async () => {
+    for (const response of [
+      await request(app.getHttpServer()).get('/v1/admin/projects'),
+      await request(app.getHttpServer()).options('/v1/admin/projects'),
+      await request(app.getHttpServer())
+        .post('/v1/admin/projects/not-a-route')
+        .send({}),
+    ]) {
+      expect(response).toMatchObject({
+        status: 404,
+        headers: {
+          'content-type': expect.stringContaining('application/problem+json'),
+        },
+        body: {
+          code: 'ROUTE_NOT_FOUND',
+          requestId: expect.any(String),
+        },
+      });
+      expect(response.headers['www-authenticate']).toBeUndefined();
+      expect(response.body.requestId).toBe(response.headers['x-request-id']);
+    }
+  });
+
+  it('keeps auth-before-parser on query-string and trailing-slash bootstrap requests', async () => {
+    for (const path of [
+      '/v1/admin/projects?source=test',
+      '/v1/admin/projects/',
+    ]) {
+      const missingCredential = await request(app.getHttpServer())
+        .post(path)
+        .set('Content-Type', 'application/json')
+        .send('{');
+      expect(missingCredential).toMatchObject({
+        status: 401,
+        headers: { 'www-authenticate': 'Bearer' },
+        body: { code: 'INVALID_SYSTEM_ADMIN_TOKEN' },
+      });
+
+      const validCredential = await request(app.getHttpServer())
+        .post(path)
+        .set('Authorization', `Bearer ${systemAdminToken}`)
+        .set('Content-Type', 'application/json')
+        .send('{');
+      expect(validCredential).toMatchObject({
+        status: 400,
+        body: { code: 'VALIDATION_ERROR' },
+      });
+      expect(validCredential.headers['www-authenticate']).toBeUndefined();
+    }
+  });
+
+  it('matches the framework-accepted bootstrap path without case drift', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/V1/ADMIN/PROJECTS')
+      .set('Content-Type', 'application/json')
+      .send('{');
+
+    expect(response).toMatchObject({
+      status: 401,
+      headers: { 'www-authenticate': 'Bearer' },
+      body: { code: 'INVALID_SYSTEM_ADMIN_TOKEN' },
+    });
+  });
+
   it('rejects metrics and project API credentials while preserving audit correlation and non-idempotency', async () => {
     const first = await request(app.getHttpServer())
       .post('/v1/admin/projects')

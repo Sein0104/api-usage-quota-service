@@ -26,7 +26,11 @@ describe('AppModule configuration', () => {
       imports: [AppModule],
     }).compile();
 
-    expect(() => module.get(SystemAdminGuard)).toThrow();
+    try {
+      expect(() => module.get(SystemAdminGuard)).toThrow();
+    } finally {
+      await module.close();
+    }
   });
 
   it('uses the validated environment supplied to the root dynamic module', async () => {
@@ -39,7 +43,13 @@ describe('AppModule configuration', () => {
       imports: [forRoot(environment)],
     }).compile();
 
-    expect(module.get(SYSTEM_ADMIN_TOKEN)).toBe(environment.SYSTEM_ADMIN_TOKEN);
-    expect(module.get(API_KEY_PEPPER)).toBe(environment.API_KEY_PEPPER);
+    try {
+      expect(module.get(SYSTEM_ADMIN_TOKEN)).toBe(
+        environment.SYSTEM_ADMIN_TOKEN,
+      );
+      expect(module.get(API_KEY_PEPPER)).toBe(environment.API_KEY_PEPPER);
+    } finally {
+      await module.close();
+    }
   });
 });

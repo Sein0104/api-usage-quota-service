@@ -5,6 +5,7 @@ import {
   type ValidationError,
 } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { NextFunction, Request, Response } from 'express';
 import { pathToFileURL } from 'node:url';
 import { AppModule } from './app.module.js';
 import { ProblemDetailsFilter } from './common/http/problem-details.filter.js';
@@ -13,6 +14,7 @@ import { ProblemException } from './common/http/problem.exception.js';
 import { requestIdMiddleware } from './common/http/request-id.middleware.js';
 import { validateEnvironment } from './config/environment.schema.js';
 import { SystemAdminAuthenticator } from './system-admin/system-admin-authenticator.service.js';
+import { isSystemAdminProjectBootstrapRequest } from './system-admin/system-admin-route.matcher.js';
 
 function toValidationErrors(
   errors: ValidationError[],
@@ -25,8 +27,15 @@ function toValidationErrors(
 
 export function configureApplication(app: INestApplication): void {
   app.use(requestIdMiddleware);
-  // Body endpoints opt in here to ensure authentication precedes Express JSON parsing.
-  app.use('/v1/admin/projects', app.get(SystemAdminAuthenticator).middleware);
+  // This unmounted matcher avoids Express prefix-mount semantics so only the
+  // real operation authenticates before JSON parsing; unknown routes stay 404.
+  app.use((request: Request, response: Response, next: NextFunction) => {
+    if (isSystemAdminProjectBootstrapRequest(request)) {
+      app.get(SystemAdminAuthenticator).middleware(request, response, next);
+      return;
+    }
+    next();
+  });
   app.setGlobalPrefix('v1', {
     exclude: [
       { path: 'health/live', method: RequestMethod.GET },
