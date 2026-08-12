@@ -127,6 +127,7 @@ describe('Project bootstrap transaction', () => {
         throw new Error('forced audit write failure');
       },
       recordApiKeyCreated: async (): Promise<void> => undefined,
+      recordApiKeyRevoked: async (): Promise<void> => undefined,
     } as AuditWriteRepository;
 
     await expect(

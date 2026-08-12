@@ -110,6 +110,7 @@ describe('API key creation transaction', () => {
       recordApiKeyCreated: async (): Promise<void> => {
         throw new Error('forced audit failure');
       },
+      recordApiKeyRevoked: async (): Promise<void> => undefined,
       recordProjectCreated: async (): Promise<void> => undefined,
     } as AuditWriteRepository;
     await expect(

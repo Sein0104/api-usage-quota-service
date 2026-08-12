@@ -16,7 +16,8 @@
     "start:dev": "nest start --watch",
     "prisma:generate": "prisma generate",
     "test:integration": "node --no-warnings --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.mjs --runInBand --testPathPatterns=test/integration",
-    "test:unit": "node --no-warnings --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.mjs --runInBand --testPathIgnorePatterns=test/e2e --testPathIgnorePatterns=test/integration",
+    "test:concurrency": "node --no-warnings --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.mjs --runInBand --testPathPatterns=test/concurrency",
+    "test:unit": "node --no-warnings --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.mjs --runInBand --testPathIgnorePatterns=test/e2e --testPathIgnorePatterns=test/integration --testPathIgnorePatterns=test/concurrency",
     "test:e2e": "node --no-warnings --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.mjs --runInBand --testPathPatterns=test/e2e",
     "typecheck": "tsc --noEmit"
   },

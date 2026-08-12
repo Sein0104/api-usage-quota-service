@@ -9,6 +9,10 @@ import type { AuthenticatedApiKey } from './auth/authenticated-api-key.js';
 import type { ApiScope } from './api-key.scopes.js';
 import { canonicalizeApiScopes } from './api-key.scopes.js';
 import { ApiKeysRepository } from './api-keys.repository.js';
+import { CursorCodec } from '../common/pagination/cursor-codec.js';
+import type { PageRequest, CursorPage } from '../common/pagination/page.js';
+import { buildCursorPage } from '../common/pagination/page.js';
+import { presentApiKey } from './api-key.presenter.js';
 
 export interface CreateApiKeyCommand {
   name: string;
@@ -63,6 +67,7 @@ export class ApiKeysService {
     private readonly credentials: ApiKeyCredentialService,
     private readonly repository: ApiKeysRepository,
     private readonly auditWriter: AuditWriteRepository,
+    private readonly cursorCodec: CursorCodec = new CursorCodec(),
   ) {}
 
   async create(
@@ -120,5 +125,91 @@ export class ApiKeysService {
         title: 'Dependency unavailable',
       });
     }
+  }
+
+  async list(
+    actor: AuthenticatedApiKey,
+    page: PageRequest,
+  ): Promise<CursorPage<ReturnType<typeof presentApiKey>>> {
+    try {
+      const records = await this.repository.list(
+        this.prisma,
+        actor.projectId,
+        page.cursor,
+        page.limit + 1,
+      );
+      return buildCursorPage(
+        records.map((record) => presentApiKey(record)),
+        page.limit,
+        (item) =>
+          this.cursorCodec.encode({
+            createdAt: new Date(item.createdAt),
+            id: item.id,
+          }),
+      );
+    } catch (error) {
+      this.rethrowDatabaseError(error);
+    }
+  }
+
+  async revoke(
+    actor: AuthenticatedApiKey,
+    id: string,
+    context: ApiKeyCreateContext,
+  ): Promise<void> {
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        await this.repository.lockProject(tx, actor.projectId);
+        const target = await this.repository.lockForRevoke(
+          tx,
+          actor.projectId,
+          id,
+        );
+        if (target === null) {
+          throw new ProblemException({
+            code: ProblemCode.RESOURCE_NOT_FOUND,
+            detail: 'The requested resource was not found.',
+            status: 404,
+            title: 'Resource not found',
+          });
+        }
+        if (actor.id === target.id) {
+          throw new ProblemException({
+            code: ProblemCode.CANNOT_REVOKE_CURRENT_KEY,
+            detail: 'The currently authenticated API key cannot revoke itself.',
+            status: 409,
+            title: 'Cannot revoke current API key',
+          });
+        }
+        if (target.status === 'REVOKED') return;
+
+        await this.repository.revoke(tx, actor.projectId, target.id);
+        await this.auditWriter.recordApiKeyRevoked(tx, {
+          actorKeyId: actor.id,
+          name: target.name,
+          prefix: target.prefix,
+          projectId: actor.projectId,
+          requestId: context.requestId,
+          resourceApiKeyId: target.id,
+        });
+      });
+    } catch (error) {
+      this.rethrowDatabaseError(error);
+    }
+  }
+
+  private rethrowDatabaseError(error: unknown): never {
+    if (
+      error instanceof ProblemException ||
+      !isDatabaseDependencyError(error)
+    ) {
+      throw error;
+    }
+    throw new ProblemException({
+      code: ProblemCode.DEPENDENCY_UNAVAILABLE,
+      detail: 'A required dependency is temporarily unavailable.',
+      status: 503,
+      title: 'Dependency unavailable',
+    });
   }
 }

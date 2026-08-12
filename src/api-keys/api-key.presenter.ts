@@ -1,4 +1,4 @@
-import type { ApiKey } from '../generated/prisma/client.js';
+import type { ApiKeyStatus } from '../generated/prisma/client.js';
 import { canonicalizeApiScopes } from './api-key.scopes.js';
 
 export const INITIAL_ADMIN_SCOPES = [
@@ -8,7 +8,17 @@ export const INITIAL_ADMIN_SCOPES = [
   'audit:read',
 ] as const;
 
-export function presentApiKey(apiKey: ApiKey): {
+export interface PublicApiKeyRecord {
+  id: string;
+  name: string;
+  prefix: string;
+  scopes: string[];
+  status: ApiKeyStatus;
+  createdAt: Date;
+  revokedAt: Date | null;
+}
+
+export function presentApiKey(apiKey: PublicApiKeyRecord): {
   id: string;
   name: string;
   prefix: string;

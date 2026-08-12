@@ -147,7 +147,9 @@ describe('POST /v1/api-keys', () => {
       body: { code: 'INVALID_API_KEY', requestId: expect.any(String) },
     });
 
-    const getRoute = await request(app.getHttpServer()).get('/v1/api-keys');
+    const getRoute = await request(app.getHttpServer())
+      .get('/v1/api-keys/not-a-route')
+      .set('Authorization', `Bearer ${managerSecret}`);
     expect(getRoute).toMatchObject({
       status: 404,
       body: { code: 'ROUTE_NOT_FOUND', requestId: expect.any(String) },

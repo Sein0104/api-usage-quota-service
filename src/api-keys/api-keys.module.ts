@@ -16,6 +16,7 @@ import { ApiKeysService } from './api-keys.service.js';
 import { ApiKeyAuthGuard } from './auth/api-key-auth.guard.js';
 import { ApiKeyAuthService } from './auth/api-key-auth.service.js';
 import { ScopesGuard } from './auth/scopes.guard.js';
+import { CursorCodec } from '../common/pagination/cursor-codec.js';
 
 @Module({
   controllers: [ApiKeysController],
@@ -45,6 +46,7 @@ import { ScopesGuard } from './auth/scopes.guard.js';
     ApiKeyEarlyAuthorizer,
     ApiKeysRepository,
     ApiKeysService,
+    CursorCodec,
   ],
 })
 export class ApiKeysModule {}
