@@ -26,7 +26,10 @@ function toValidationErrors(
 export function configureApplication(app: INestApplication): void {
   app.use(requestIdMiddleware);
   app.setGlobalPrefix('v1', {
-    exclude: [{ path: 'health/live', method: RequestMethod.GET }],
+    exclude: [
+      { path: 'health/live', method: RequestMethod.GET },
+      { path: 'health/ready', method: RequestMethod.GET },
+    ],
   });
   app.useGlobalPipes(
     new ValidationPipe({
@@ -52,6 +55,7 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
 
   configureApplication(app);
+  app.enableShutdownHooks();
   await app.listen(environment.PORT);
 }
 
