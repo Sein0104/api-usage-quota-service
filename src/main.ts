@@ -23,6 +23,7 @@ import {
   isSystemAdminProjectBootstrapRequest,
   isUnregisteredSystemAdminProjectDescendant,
 } from './system-admin/system-admin-route.matcher.js';
+import { parseIdempotencyKey } from './usage/http/idempotency-key.js';
 
 function toValidationErrors(
   errors: ValidationError[],
@@ -44,9 +45,25 @@ export function configureApplication(app: INestApplication): void {
     }
     const apiKeyPolicy = apiKeyRoutePolicy(request);
     if (apiKeyPolicy !== null) {
-      void app
-        .get(ApiKeyEarlyAuthorizer)
-        .authorize(request, response, next, apiKeyPolicy.requiredScopes);
+      void app.get(ApiKeyEarlyAuthorizer).authorize(
+        request,
+        response,
+        (error?: unknown) => {
+          if (error !== undefined) {
+            next(error);
+            return;
+          }
+          try {
+            if (apiKeyPolicy.idempotencyKey === true) {
+              request.idempotencyKey = parseIdempotencyKey(request.rawHeaders);
+            }
+            next();
+          } catch (validationError) {
+            next(validationError);
+          }
+        },
+        apiKeyPolicy.requiredScopes,
+      );
       return;
     }
     // New descendants must be added to this classifier with their own policy.

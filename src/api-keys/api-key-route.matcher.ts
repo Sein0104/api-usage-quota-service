@@ -4,6 +4,7 @@ interface RequestTarget {
 }
 
 const collectionPaths = new Set(['/v1/api-keys', '/v1/api-keys/']);
+const usageEventPaths = new Set(['/v1/usage-events', '/v1/usage-events/']);
 
 function pathOf(request: RequestTarget): string {
   return request.originalUrl.split('?', 1)[0].toLowerCase();
@@ -14,6 +15,7 @@ export function isApiKeyCreateRequest(request: RequestTarget): boolean {
 }
 
 export interface ApiKeyRoutePolicy {
+  idempotencyKey?: true;
   requiredScopes: readonly import('./api-key.scopes.js').ApiScope[];
 }
 
@@ -29,15 +31,22 @@ export function isApiKeyManagedRequest(request: RequestTarget): boolean {
 export function apiKeyRoutePolicy(
   request: RequestTarget,
 ): ApiKeyRoutePolicy | null {
-  return isApiKeyManagedRequest(request)
-    ? { requiredScopes: ['keys:manage'] }
-    : null;
+  if (isApiKeyManagedRequest(request)) {
+    return { requiredScopes: ['keys:manage'] };
+  }
+  if (request.method === 'POST' && usageEventPaths.has(pathOf(request))) {
+    return { idempotencyKey: true, requiredScopes: ['usage:write'] };
+  }
+  return null;
 }
 
 export function isUnregisteredApiKeyRoute(request: RequestTarget): boolean {
   const path = pathOf(request);
   return (
-    !isApiKeyManagedRequest(request) &&
-    (path === '/v1/api-keys' || path.startsWith('/v1/api-keys/'))
+    apiKeyRoutePolicy(request) === null &&
+    (path === '/v1/api-keys' ||
+      path.startsWith('/v1/api-keys/') ||
+      path === '/v1/usage-events' ||
+      path.startsWith('/v1/usage-events/'))
   );
 }

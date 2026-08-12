@@ -42,4 +42,26 @@ describe('API key route policy', () => {
     });
     expect(apiKeyRoutePolicy(request('GET', '/v1/api-keys/a'))).toBeNull();
   });
+
+  it.each([
+    ['POST', '/v1/usage-events'],
+    ['POST', '/v1/usage-events/'],
+    ['POST', '/v1/USAGE-EVENTS?source=retry'],
+  ])('authenticates the exact usage ingest operation %s %s', (method, url) => {
+    expect(apiKeyRoutePolicy(request(method, url))).toEqual({
+      idempotencyKey: true,
+      requiredScopes: ['usage:write'],
+    });
+    expect(isUnregisteredApiKeyRoute(request(method, url))).toBe(false);
+  });
+
+  it.each([
+    ['GET', '/v1/usage-events'],
+    ['PATCH', '/v1/usage-events/'],
+    ['POST', '/v1/usage-events/child'],
+    ['DELETE', '/v1/usage-events/child/grandchild'],
+  ])('keeps unknown usage routes parser-before 404: %s %s', (method, url) => {
+    expect(apiKeyRoutePolicy(request(method, url))).toBeNull();
+    expect(isUnregisteredApiKeyRoute(request(method, url))).toBe(true);
+  });
 });

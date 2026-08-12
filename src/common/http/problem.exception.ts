@@ -10,6 +10,7 @@ export interface ProblemExceptionOptions {
   code: ProblemCode;
   detail: string;
   errors?: ProblemError[];
+  extensions?: Record<string, unknown>;
   headers?: Record<string, string>;
   status: number;
   title: string;

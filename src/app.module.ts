@@ -5,6 +5,7 @@ import { DatabaseModule } from './database/database.module.js';
 import { HealthController } from './observability/health.controller.js';
 import { SystemAdminModule } from './system-admin/system-admin.module.js';
 import { ApiKeysModule } from './api-keys/api-keys.module.js';
+import { UsageModule } from './usage/usage.module.js';
 
 @Module({})
 export class AppModule {
@@ -16,6 +17,7 @@ export class AppModule {
         DatabaseModule,
         ApiKeysModule,
         SystemAdminModule,
+        UsageModule,
       ],
       module: AppModule,
     };
