@@ -11,3 +11,10 @@ export function isSystemAdminProjectBootstrapRequest(
   const path = request.originalUrl.split('?', 1)[0].toLowerCase();
   return request.method === 'POST' && bootstrapPaths.has(path);
 }
+
+export function isUnregisteredSystemAdminProjectDescendant(
+  request: RequestTarget,
+): boolean {
+  const path = request.originalUrl.split('?', 1)[0].toLowerCase();
+  return path.startsWith('/v1/admin/projects/') && !bootstrapPaths.has(path);
+}

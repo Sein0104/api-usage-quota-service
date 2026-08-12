@@ -1,4 +1,7 @@
-import { isSystemAdminProjectBootstrapRequest } from './system-admin-route.matcher.js';
+import {
+  isSystemAdminProjectBootstrapRequest,
+  isUnregisteredSystemAdminProjectDescendant,
+} from './system-admin-route.matcher.js';
 
 describe('isSystemAdminProjectBootstrapRequest', () => {
   it.each([
@@ -14,6 +17,24 @@ describe('isSystemAdminProjectBootstrapRequest', () => {
     (method, url, expected) => {
       expect(
         isSystemAdminProjectBootstrapRequest({ method, originalUrl: url }),
+      ).toBe(expected);
+    },
+  );
+});
+
+describe('isUnregisteredSystemAdminProjectDescendant', () => {
+  it.each([
+    ['POST', '/v1/admin/projects/not-a-route', true],
+    ['PUT', '/v1/admin/projects/not-a-route', true],
+    ['PATCH', '/v1/admin/projects/not-a-route', true],
+    ['POST', '/V1/ADMIN/PROJECTS/not-a-route?x=1', true],
+    ['POST', '/v1/admin/projects/', false],
+    ['GET', '/v1/admin/projects/not-a-route', true],
+  ])(
+    'classifies every unregistered descendant route: %s %s',
+    (method, originalUrl, expected) => {
+      expect(
+        isUnregisteredSystemAdminProjectDescendant({ method, originalUrl }),
       ).toBe(expected);
     },
   );

@@ -176,6 +176,23 @@ describe('POST /v1/admin/projects', () => {
     }
   });
 
+  it('returns route-not-found before parsing malformed JSON for an unregistered descendant', async () => {
+    const response = await request(app.getHttpServer())
+      .post('/v1/admin/projects/not-a-route')
+      .set('Content-Type', 'application/json')
+      .send('{');
+
+    expect(response).toMatchObject({
+      status: 404,
+      headers: {
+        'content-type': expect.stringContaining('application/problem+json'),
+      },
+      body: { code: 'ROUTE_NOT_FOUND', requestId: expect.any(String) },
+    });
+    expect(response.headers['www-authenticate']).toBeUndefined();
+    expect(response.body.requestId).toBe(response.headers['x-request-id']);
+  });
+
   it('keeps auth-before-parser on query-string and trailing-slash bootstrap requests', async () => {
     for (const path of [
       '/v1/admin/projects?source=test',

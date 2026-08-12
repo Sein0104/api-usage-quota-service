@@ -14,7 +14,10 @@ import { ProblemException } from './common/http/problem.exception.js';
 import { requestIdMiddleware } from './common/http/request-id.middleware.js';
 import { validateEnvironment } from './config/environment.schema.js';
 import { SystemAdminAuthenticator } from './system-admin/system-admin-authenticator.service.js';
-import { isSystemAdminProjectBootstrapRequest } from './system-admin/system-admin-route.matcher.js';
+import {
+  isSystemAdminProjectBootstrapRequest,
+  isUnregisteredSystemAdminProjectDescendant,
+} from './system-admin/system-admin-route.matcher.js';
 
 function toValidationErrors(
   errors: ValidationError[],
@@ -32,6 +35,18 @@ export function configureApplication(app: INestApplication): void {
   app.use((request: Request, response: Response, next: NextFunction) => {
     if (isSystemAdminProjectBootstrapRequest(request)) {
       app.get(SystemAdminAuthenticator).middleware(request, response, next);
+      return;
+    }
+    // New descendants must be added to this classifier with their own policy.
+    if (isUnregisteredSystemAdminProjectDescendant(request)) {
+      next(
+        new ProblemException({
+          code: ProblemCode.ROUTE_NOT_FOUND,
+          detail: 'The requested route was not found.',
+          status: 404,
+          title: 'Route not found',
+        }),
+      );
       return;
     }
     next();
