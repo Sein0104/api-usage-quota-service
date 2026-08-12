@@ -8,6 +8,30 @@ interface MigrationRow {
   rolled_back_at: Date | null;
 }
 
+interface DatabaseError {
+  code?: string;
+}
+
+function isUnavailableMigrationDependency(error: unknown): boolean {
+  const code = (error as DatabaseError).code;
+  return (
+    code === '42P01' ||
+    code?.startsWith('08') === true ||
+    [
+      'ECONNREFUSED',
+      'ENOTFOUND',
+      'EAI_AGAIN',
+      'ETIMEDOUT',
+      'ECONNRESET',
+      'EHOSTUNREACH',
+      'ENETUNREACH',
+      '57P01',
+      '57P02',
+      '57P03',
+    ].includes(code ?? '')
+  );
+}
+
 @Injectable()
 export class MigrationStatusService {
   constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
@@ -34,8 +58,12 @@ export class MigrationStatusService {
       );
 
       return expectedMigrationsAreApplied && noMigrationFailedOrIsIncomplete;
-    } catch {
-      return false;
+    } catch (error) {
+      if (isUnavailableMigrationDependency(error)) {
+        return false;
+      }
+
+      throw error;
     }
   }
 }

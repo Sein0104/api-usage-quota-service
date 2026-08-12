@@ -53,4 +53,24 @@ describe('readiness HTTP contract', () => {
     expect(response.headers['content-type']).toContain('application/json');
     expect(response.body).toEqual({ status: 'ready' });
   });
+
+  it('returns generic 500 Problem Details for an unexpected readiness error', async () => {
+    await startWithReadiness(async () => {
+      throw new Error('postgresql://secret-user:secret-password@db/private');
+    });
+
+    const response = await request(app.getHttpServer()).get('/health/ready');
+
+    expect(response).toMatchObject({
+      status: 500,
+      headers: {
+        'content-type': expect.stringContaining('application/problem+json'),
+      },
+      body: {
+        code: 'INTERNAL_ERROR',
+        requestId: expect.any(String),
+      },
+    });
+    expect(JSON.stringify(response.body)).not.toContain('secret-password');
+  });
 });

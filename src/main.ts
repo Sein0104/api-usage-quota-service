@@ -55,6 +55,7 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
 
   configureApplication(app);
+  app.enableShutdownHooks();
   await app.listen(environment.PORT);
 }
 

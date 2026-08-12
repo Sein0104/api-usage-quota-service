@@ -8,5 +8,6 @@ export function createPostgresPool(
     connectionTimeoutMillis: 3_000,
     idleTimeoutMillis: 30_000,
     max: 10,
+    options: '-c TimeZone=UTC',
   });
 }
