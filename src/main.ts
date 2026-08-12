@@ -16,7 +16,7 @@ import { validateEnvironment } from './config/environment.schema.js';
 import { SystemAdminAuthenticator } from './system-admin/system-admin-authenticator.service.js';
 import { ApiKeyEarlyAuthorizer } from './api-keys/api-key-early-authorizer.service.js';
 import {
-  isApiKeyCreateRequest,
+  apiKeyRoutePolicy,
   isUnregisteredApiKeyRoute,
 } from './api-keys/api-key-route.matcher.js';
 import {
@@ -42,8 +42,11 @@ export function configureApplication(app: INestApplication): void {
       app.get(SystemAdminAuthenticator).middleware(request, response, next);
       return;
     }
-    if (isApiKeyCreateRequest(request)) {
-      app.get(ApiKeyEarlyAuthorizer).middleware(request, response, next);
+    const apiKeyPolicy = apiKeyRoutePolicy(request);
+    if (apiKeyPolicy !== null) {
+      void app
+        .get(ApiKeyEarlyAuthorizer)
+        .authorize(request, response, next, apiKeyPolicy.requiredScopes);
       return;
     }
     // New descendants must be added to this classifier with their own policy.

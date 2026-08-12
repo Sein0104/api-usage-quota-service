@@ -5,6 +5,7 @@ import { ProblemCode } from '../common/http/problem-code.js';
 import { ProblemException } from '../common/http/problem.exception.js';
 import { attachAuthenticatedApiKey } from './auth/api-key-request-principal.js';
 import { ApiKeyAuthService } from './auth/api-key-auth.service.js';
+import type { ApiScope } from './api-key.scopes.js';
 
 @Injectable()
 export class ApiKeyEarlyAuthorizer {
@@ -14,12 +15,19 @@ export class ApiKeyEarlyAuthorizer {
     request: Request,
     _response: Response,
     next: NextFunction,
-  ): Promise<void> => {
+  ): Promise<void> => this.authorize(request, _response, next, ['keys:manage']);
+
+  async authorize(
+    request: Request,
+    _response: Response,
+    next: NextFunction,
+    requiredScopes: readonly ApiScope[],
+  ): Promise<void> {
     try {
       const principal = await this.authenticator.authenticate(
         parseBearerCredential(request.rawHeaders),
       );
-      if (!principal.scopes.includes('keys:manage')) {
+      if (!requiredScopes.every((scope) => principal.scopes.includes(scope))) {
         throw new ProblemException({
           code: ProblemCode.INSUFFICIENT_SCOPE,
           detail: 'The API key does not have the required scope.',
@@ -32,5 +40,5 @@ export class ApiKeyEarlyAuthorizer {
     } catch (error) {
       next(error);
     }
-  };
+  }
 }
