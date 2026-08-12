@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { jest } from '@jest/globals';
+import { Prisma } from '../generated/prisma/client.js';
 import type { PrismaService } from '../database/prisma.service.js';
 import { UsageRepository } from './usage.repository.js';
 import { UsageService } from './usage.service.js';
@@ -53,5 +55,25 @@ describe('UsageService database error mapping', () => {
         context,
       ),
     ).rejects.toBe(constraint);
+  });
+
+  it('opens the usage transaction with explicit READ COMMITTED isolation', async () => {
+    const dependencyFailure = { code: 'P1001' };
+    const transaction = jest.fn(async () => {
+      throw dependencyFailure;
+    });
+    const service = new UsageService(
+      { $transaction: transaction } as unknown as PrismaService,
+      new UsageRepository(),
+    );
+
+    await expect(
+      service.ingest(actor, { units: 1 }, randomUUID(), context),
+    ).rejects.toMatchObject({
+      problem: { code: 'DEPENDENCY_UNAVAILABLE', status: 503 },
+    });
+    expect(transaction).toHaveBeenCalledWith(expect.any(Function), {
+      isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+    });
   });
 });

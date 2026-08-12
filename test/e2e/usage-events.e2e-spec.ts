@@ -1,8 +1,13 @@
 import type { INestApplication } from '@nestjs/common';
 import { beforeEach, jest } from '@jest/globals';
 import { Test } from '@nestjs/testing';
-import request from 'supertest';
 import { randomUUID } from 'node:crypto';
+import {
+  type IncomingHttpHeaders,
+  request as sendHttpRequest,
+} from 'node:http';
+import type { AddressInfo } from 'node:net';
+import request from 'supertest';
 import { AppModule } from '../../src/app.module.js';
 import { configureApplication } from '../../src/main.js';
 import { createPostgresTestHarness } from '../support/postgres-test-harness.js';
@@ -19,6 +24,12 @@ describe('POST /v1/usage-events', () => {
   let app: INestApplication;
   let managerSecret: string;
   let noScopeSecret: string;
+
+  interface RawUsageResponse {
+    body: Record<string, unknown>;
+    headers: IncomingHttpHeaders;
+    status: number;
+  }
 
   beforeAll(async () => {
     await harness.start();
@@ -37,7 +48,7 @@ describe('POST /v1/usage-events', () => {
     }).compile();
     app = module.createNestApplication();
     configureApplication(app);
-    await app.init();
+    await app.listen(0, '127.0.0.1');
   });
 
   beforeEach(async () => {
@@ -63,6 +74,63 @@ describe('POST /v1/usage-events', () => {
       .post('/v1/usage-events')
       .set('Authorization', `Bearer ${managerSecret}`)
       .set('Idempotency-Key', key);
+  }
+
+  function postWithDuplicateRawIdempotencyKeys(
+    first: string,
+    second: string,
+  ): Promise<RawUsageResponse> {
+    const address = app.getHttpServer().address() as
+      AddressInfo | string | null;
+    if (address === null || typeof address === 'string') {
+      throw new Error('The E2E HTTP server must listen on a TCP port.');
+    }
+
+    return new Promise((resolve, reject) => {
+      const outgoing = sendHttpRequest(
+        {
+          headers: [
+            'Authorization',
+            `Bearer ${managerSecret}`,
+            'Idempotency-Key',
+            first,
+            'Idempotency-Key',
+            second,
+            'Host',
+            `127.0.0.1:${address.port}`,
+            'Content-Type',
+            'application/json',
+            'Content-Length',
+            '1',
+            'Connection',
+            'close',
+          ],
+          host: '127.0.0.1',
+          method: 'POST',
+          path: '/v1/usage-events',
+          port: address.port,
+        },
+        (response) => {
+          let body = '';
+          response.setEncoding('utf8');
+          response.on('data', (chunk: string) => {
+            body += chunk;
+          });
+          response.on('end', () => {
+            resolve({
+              body: JSON.parse(body) as Record<string, unknown>,
+              headers: response.headers,
+              status: response.statusCode ?? 0,
+            });
+          });
+        },
+      );
+      outgoing.once('error', reject);
+      outgoing.setTimeout(10_000, () => {
+        outgoing.destroy(new Error('Raw duplicate-header request timed out.'));
+      });
+      outgoing.end('{');
+    });
   }
 
   it('keeps authentication and scope ahead of idempotency and JSON parsing', async () => {
@@ -151,6 +219,42 @@ describe('POST /v1/usage-events', () => {
     });
   });
 
+  it.each([
+    [
+      'identical',
+      '64f4ce08-03df-40fa-ae44-ebd9d5847827',
+      '64f4ce08-03df-40fa-ae44-ebd9d5847827',
+    ],
+    [
+      'different',
+      '64f4ce08-03df-40fa-ae44-ebd9d5847828',
+      '64f4ce08-03df-40fa-ae44-ebd9d5847829',
+    ],
+  ])(
+    'rejects %s duplicate Idempotency-Key fields on the HTTP wire before parsing the body',
+    async (_kind, first, second) => {
+      const response = await postWithDuplicateRawIdempotencyKeys(first, second);
+
+      expect(response).toMatchObject({
+        status: 400,
+        headers: {
+          'content-type': expect.stringContaining('application/problem+json'),
+        },
+        body: {
+          code: 'VALIDATION_ERROR',
+          errors: [
+            {
+              field: 'Idempotency-Key',
+              reason: expect.any(String),
+            },
+          ],
+          requestId: expect.any(String),
+        },
+      });
+      expect(response.body.requestId).toBe(response.headers['x-request-id']);
+    },
+  );
+
   it('keeps wrong methods and descendants parser-before 404', async () => {
     for (const response of await Promise.all([
       request(app.getHttpServer())
@@ -225,6 +329,20 @@ describe('POST /v1/usage-events', () => {
         usageDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
       },
     });
+    expect(Object.keys(first.body).sort()).toEqual([
+      'decision',
+      'eventId',
+      'quota',
+      'units',
+      'usageDate',
+    ]);
+    expect(Object.keys(first.body.quota).sort()).toEqual([
+      'limit',
+      'remaining',
+      'resetAt',
+    ]);
+    expect(first.headers['retry-after']).toBeUndefined();
+    expect(replay.headers['retry-after']).toBeUndefined();
     expect(replay.body).toEqual(first.body);
     expect(replay.headers['x-quota-limit']).toBe(
       first.headers['x-quota-limit'],
@@ -271,6 +389,7 @@ describe('POST /v1/usage-events', () => {
       },
     });
     expect(first.headers['retry-after']).toBeUndefined();
+    expect(replay.headers['retry-after']).toBeUndefined();
     expect(Object.keys(first.body).sort()).toEqual([
       'code',
       'decision',
@@ -287,6 +406,7 @@ describe('POST /v1/usage-events', () => {
     expect({ ...replay.body, requestId: first.body.requestId }).toEqual(
       first.body,
     );
+    expect(first.body.requestId).toBe(first.headers['x-request-id']);
     expect(replay.body.requestId).toBe(replay.headers['x-request-id']);
     expect(replay.body.requestId).not.toBe(first.body.requestId);
     expect(replay.headers['x-quota-limit']).toBe(
