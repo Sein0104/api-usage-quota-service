@@ -5,6 +5,7 @@ import { timingSafeBufferEqual } from '../../common/auth/timing-safe-secret.js';
 import { ProblemCode } from '../../common/http/problem-code.js';
 import { ProblemException } from '../../common/http/problem.exception.js';
 import { PrismaService } from '../../database/prisma.service.js';
+import { isDatabaseDependencyError } from '../../common/database/dependency-error.js';
 import { ApiKeyCredentialService } from '../api-key-credential.service.js';
 import {
   canonicalizeApiScopes,
@@ -15,25 +16,6 @@ import type { AuthenticatedApiKey } from './authenticated-api-key.js';
 
 const credentialPattern =
   /^mq_([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.([A-Za-z0-9_-]{43})$/;
-
-function isKnownDependencyError(error: unknown): boolean {
-  if (typeof error !== 'object' || error === null || !('code' in error)) {
-    return false;
-  }
-  return new Set([
-    'P1001',
-    'P1002',
-    'P1008',
-    'P1017',
-    '08000',
-    '08003',
-    '08006',
-    '53300',
-    '57P01',
-    '57P02',
-    '57P03',
-  ]).has(String(error.code));
-}
 
 @Injectable()
 export class ApiKeyAuthService {
@@ -52,10 +34,15 @@ export class ApiKeyAuthService {
     if (match === null || match === undefined) {
       throw this.invalidCredential();
     }
+    const credential = rawCredential!;
+    const secret = Buffer.from(match[2], 'base64url');
+    if (secret.length !== 32 || secret.toString('base64url') !== match[2]) {
+      throw this.invalidCredential();
+    }
+    const candidateDigest = this.credentials.digest(credential);
 
     try {
       // This is the sole unscoped API-key lookup: authentication has no tenant yet.
-      const credential = rawCredential!;
       const row = await this.prisma.apiKey.findFirst({
         select: {
           id: true,
@@ -65,6 +52,12 @@ export class ApiKeyAuthService {
         },
         where: { id: match[1], status: ApiKeyStatus.ACTIVE },
       });
+      const storedDigest =
+        row === null ? Buffer.alloc(32) : Buffer.from(row.secretDigest);
+      const digestMatches = timingSafeBufferEqual(
+        candidateDigest,
+        storedDigest,
+      );
       if (
         row === null ||
         row.secretDigest.length !== 32 ||
@@ -72,10 +65,7 @@ export class ApiKeyAuthService {
         row.scopes.length > 4 ||
         row.scopes.some((scope) => !isApiScope(scope)) ||
         new Set(row.scopes).size !== row.scopes.length ||
-        !timingSafeBufferEqual(
-          this.credentials.digest(credential),
-          Buffer.from(row.secretDigest),
-        )
+        !digestMatches
       ) {
         throw this.invalidCredential();
       }
@@ -90,7 +80,7 @@ export class ApiKeyAuthService {
       if (error instanceof ProblemException) {
         throw error;
       }
-      if (isKnownDependencyError(error)) {
+      if (isDatabaseDependencyError(error)) {
         throw new ProblemException({
           code: ProblemCode.DEPENDENCY_UNAVAILABLE,
           detail: 'A required dependency is temporarily unavailable.',

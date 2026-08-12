@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { AuditWriteRepository } from '../audit/audit-write.repository.js';
 import { ProblemCode } from '../common/http/problem-code.js';
 import { ProblemException } from '../common/http/problem.exception.js';
+import { isDatabaseDependencyError } from '../common/database/dependency-error.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { ApiKeyCredentialService } from './api-key-credential.service.js';
 import type { AuthenticatedApiKey } from './auth/authenticated-api-key.js';
@@ -23,23 +24,36 @@ export interface CreateApiKeyResult {
   plaintext: string;
 }
 
-function isKnownDependencyError(error: unknown): boolean {
-  if (typeof error !== 'object' || error === null || !('code' in error)) {
-    return false;
-  }
-  return new Set([
-    'P1001',
-    'P1002',
-    'P1008',
-    'P1017',
-    '08000',
-    '08003',
-    '08006',
-    '53300',
-    '57P01',
-    '57P02',
-    '57P03',
-  ]).has(String(error.code));
+function validateCommand(command: CreateApiKeyCommand): ApiScope[] {
+  if (
+    typeof command.name !== 'string' ||
+    command.name.length < 1 ||
+    command.name.length > 100 ||
+    command.name.trim() !== command.name
+  )
+    throw validationError();
+  if (
+    !Array.isArray(command.scopes) ||
+    command.scopes.length < 1 ||
+    command.scopes.length > 4 ||
+    new Set(command.scopes).size !== command.scopes.length ||
+    command.scopes.some(
+      (scope) =>
+        !['usage:write', 'usage:read', 'keys:manage', 'audit:read'].includes(
+          scope,
+        ),
+    )
+  )
+    throw validationError();
+  return canonicalizeApiScopes(command.scopes);
+}
+function validationError(): ProblemException {
+  return new ProblemException({
+    code: ProblemCode.VALIDATION_ERROR,
+    detail: 'Request validation failed.',
+    status: 400,
+    title: 'Validation failed',
+  });
 }
 
 @Injectable()
@@ -56,8 +70,8 @@ export class ApiKeysService {
     command: CreateApiKeyCommand,
     context: ApiKeyCreateContext,
   ): Promise<CreateApiKeyResult> {
+    const scopes = validateCommand(command);
     const issued = this.credentials.issue();
-    const scopes = canonicalizeApiScopes(command.scopes);
     try {
       return await this.prisma.$transaction(async (tx) => {
         await this.repository.lockProject(tx, actor.projectId);
@@ -93,7 +107,10 @@ export class ApiKeysService {
         return { apiKey, plaintext: issued.plaintext };
       });
     } catch (error) {
-      if (error instanceof ProblemException || !isKnownDependencyError(error)) {
+      if (
+        error instanceof ProblemException ||
+        !isDatabaseDependencyError(error)
+      ) {
         throw error;
       }
       throw new ProblemException({

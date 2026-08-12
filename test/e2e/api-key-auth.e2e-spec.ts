@@ -3,6 +3,8 @@ import { jest } from '@jest/globals';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module.js';
+import { ApiKeyStatus } from '../../src/generated/prisma/client.js';
+import { PrismaService } from '../../src/database/prisma.service.js';
 import { configureApplication } from '../../src/main.js';
 import { createPostgresTestHarness } from '../support/postgres-test-harness.js';
 import { testEnvironment } from '../support/test-environment.js';
@@ -17,6 +19,8 @@ describe('POST /v1/api-keys', () => {
   const harness = createPostgresTestHarness();
   let app: INestApplication;
   let managerSecret: string;
+  let managerId: string;
+  let prisma: PrismaService;
 
   beforeAll(async () => {
     await harness.start();
@@ -42,6 +46,8 @@ describe('POST /v1/api-keys', () => {
       .set('Authorization', `Bearer ${systemAdminToken}`)
       .send({ dailyQuotaUnits: 1000, name: 'api-key-project' });
     managerSecret = bootstrap.body.secret as string;
+    managerId = bootstrap.body.apiKey.id as string;
+    prisma = app.get(PrismaService);
   });
 
   afterAll(async () => {
@@ -144,6 +150,49 @@ describe('POST /v1/api-keys', () => {
     expect(response).toMatchObject({
       status: 400,
       body: { code: 'VALIDATION_ERROR' },
+    });
+  });
+
+  it('keeps 403 scope priority and only challenges 401 credential failures', async () => {
+    const issued = await request(app.getHttpServer())
+      .post('/v1/api-keys')
+      .set('Authorization', `Bearer ${managerSecret}`)
+      .send({ name: 'reader', scopes: ['usage:read'] });
+    const insufficient = await request(app.getHttpServer())
+      .post('/v1/api-keys')
+      .set('Authorization', `Bearer ${issued.body.secret as string}`)
+      .set('Content-Type', 'application/json')
+      .send('{');
+    expect(insufficient).toMatchObject({
+      status: 403,
+      body: { code: 'INSUFFICIENT_SCOPE' },
+    });
+    expect(insufficient.headers['www-authenticate']).toBeUndefined();
+
+    const metrics = await request(app.getHttpServer())
+      .post('/v1/api-keys')
+      .set('Authorization', `Bearer ${metricsToken}`)
+      .set('Content-Type', 'application/json')
+      .send('{');
+    expect(metrics).toMatchObject({
+      status: 401,
+      headers: { 'www-authenticate': 'Bearer' },
+      body: { code: 'INVALID_API_KEY' },
+    });
+
+    await prisma.apiKey.update({
+      where: { id: managerId },
+      data: { status: ApiKeyStatus.REVOKED, revokedAt: new Date() },
+    });
+    const revoked = await request(app.getHttpServer())
+      .post('/v1/api-keys')
+      .set('Authorization', `Bearer ${managerSecret}`)
+      .set('Content-Type', 'application/json')
+      .send('{');
+    expect(revoked).toMatchObject({
+      status: 401,
+      headers: { 'www-authenticate': 'Bearer' },
+      body: { code: 'INVALID_API_KEY' },
     });
   });
 });
