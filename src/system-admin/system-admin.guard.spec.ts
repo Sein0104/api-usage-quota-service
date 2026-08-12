@@ -1,9 +1,12 @@
 import { ProblemException } from '../common/http/problem.exception.js';
+import { SystemAdminAuthenticator } from './system-admin-authenticator.service.js';
 import { SystemAdminGuard } from './system-admin.guard.js';
 
 describe('SystemAdminGuard', () => {
   it('rejects missing, malformed, and duplicate Authorization fields before body validation', () => {
-    const guard = new SystemAdminGuard('system-admin-token');
+    const guard = new SystemAdminGuard(
+      new SystemAdminAuthenticator('system-admin-token'),
+    );
     const makeContext = (rawHeaders: string[]) => ({
       switchToHttp: () => ({ getRequest: () => ({ rawHeaders }) }),
     });

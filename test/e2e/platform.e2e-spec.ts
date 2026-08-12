@@ -11,6 +11,7 @@ import request from 'supertest';
 import { AppModule } from '../../src/app.module.js';
 import { JsonContentTypeGuard } from '../../src/common/http/json-content-type.guard.js';
 import { configureApplication } from '../../src/main.js';
+import { testEnvironment } from '../support/test-environment.js';
 
 const UUID_V4 =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -34,7 +35,7 @@ describe('platform HTTP contract', () => {
 
   beforeAll(async () => {
     const module = await Test.createTestingModule({
-      imports: [AppModule],
+      imports: [AppModule.forRoot(testEnvironment())],
       controllers: [TestValidationController],
     }).compile();
 

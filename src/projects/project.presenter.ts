@@ -1,11 +1,8 @@
 import type { Project } from '../generated/prisma/client.js';
 
 function presentBigInt(value: bigint): number {
-  if (
-    value > BigInt(Number.MAX_SAFE_INTEGER) ||
-    value < BigInt(Number.MIN_SAFE_INTEGER)
-  ) {
-    throw new RangeError('A database integer exceeded the JSON safe range.');
+  if (value > 1_000_000_000n || value < 0n) {
+    throw new RangeError('A database quota exceeded the JSON response range.');
   }
   return Number(value);
 }

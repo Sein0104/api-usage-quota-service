@@ -12,6 +12,7 @@ import { ProblemCode } from './common/http/problem-code.js';
 import { ProblemException } from './common/http/problem.exception.js';
 import { requestIdMiddleware } from './common/http/request-id.middleware.js';
 import { validateEnvironment } from './config/environment.schema.js';
+import { SystemAdminAuthenticator } from './system-admin/system-admin-authenticator.service.js';
 
 function toValidationErrors(
   errors: ValidationError[],
@@ -24,6 +25,8 @@ function toValidationErrors(
 
 export function configureApplication(app: INestApplication): void {
   app.use(requestIdMiddleware);
+  // Body endpoints opt in here to ensure authentication precedes Express JSON parsing.
+  app.use('/v1/admin/projects', app.get(SystemAdminAuthenticator).middleware);
   app.setGlobalPrefix('v1', {
     exclude: [
       { path: 'health/live', method: RequestMethod.GET },
@@ -50,7 +53,7 @@ export function configureApplication(app: INestApplication): void {
 
 async function bootstrap(): Promise<void> {
   const environment = validateEnvironment(process.env);
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule.forRoot(environment));
 
   configureApplication(app);
   app.enableShutdownHooks();
