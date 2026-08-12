@@ -7,7 +7,6 @@ import {
 import { NestFactory } from '@nestjs/core';
 import { pathToFileURL } from 'node:url';
 import { AppModule } from './app.module.js';
-import { JsonContentTypeGuard } from './common/http/json-content-type.guard.js';
 import { ProblemDetailsFilter } from './common/http/problem-details.filter.js';
 import { ProblemCode } from './common/http/problem-code.js';
 import { ProblemException } from './common/http/problem.exception.js';
@@ -46,7 +45,6 @@ export function configureApplication(app: INestApplication): void {
       whitelist: true,
     }),
   );
-  app.useGlobalGuards(new JsonContentTypeGuard());
   app.useGlobalFilters(new ProblemDetailsFilter());
 }
 

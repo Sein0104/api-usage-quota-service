@@ -1,8 +1,15 @@
-import { Body, Controller, type INestApplication, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  type INestApplication,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { IsString } from 'class-validator';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module.js';
+import { JsonContentTypeGuard } from '../../src/common/http/json-content-type.guard.js';
 import { configureApplication } from '../../src/main.js';
 
 const UUID_V4 =
@@ -14,6 +21,7 @@ class TestRequestDto {
 }
 
 @Controller('test-validation')
+@UseGuards(JsonContentTypeGuard)
 class TestValidationController {
   @Post()
   create(@Body() body: TestRequestDto): TestRequestDto {
