@@ -134,16 +134,21 @@ describe('PostgreSQL schema migration', () => {
       constraints.rows.map((row) => [row.conname, row.definition]),
     );
 
-    expect(definitions.get('projects_pkey')).toBe('PRIMARY KEY (id)');
-    expect(definitions.get('api_keys_project_id_id_uq')).toBe(
-      'UNIQUE (project_id, id)',
-    );
-    expect(definitions.get('usage_events_project_idempotency_key_uq')).toBe(
-      'UNIQUE (project_id, idempotency_key)',
-    );
-    expect(definitions.get('daily_usage_pkey')).toBe(
-      'PRIMARY KEY (project_id, usage_date)',
-    );
+    const expectedKeyDefinitions = {
+      projects_pkey: 'PRIMARY KEY (id)',
+      api_keys_pkey: 'PRIMARY KEY (id)',
+      api_keys_project_id_id_uq: 'UNIQUE (project_id, id)',
+      api_keys_prefix_uq: 'UNIQUE (prefix)',
+      usage_events_pkey: 'PRIMARY KEY (id)',
+      usage_events_project_idempotency_key_uq:
+        'UNIQUE (project_id, idempotency_key)',
+      daily_usage_pkey: 'PRIMARY KEY (project_id, usage_date)',
+      audit_logs_pkey: 'PRIMARY KEY (id)',
+    };
+
+    for (const [name, definition] of Object.entries(expectedKeyDefinitions)) {
+      expect(definitions.get(name)).toBe(definition);
+    }
 
     for (const name of [
       'api_keys_project_fk',
@@ -209,7 +214,7 @@ describe('PostgreSQL schema migration', () => {
     );
   });
 
-  it('treats applied expected migrations as ready and incomplete history as not ready', async () => {
+  it('distinguishes expected incomplete, unrelated failed, and expected rolled-back migration history', async () => {
     const status = new MigrationStatusService(pool);
     expect(await status.isReady()).toBe(true);
 
@@ -225,12 +230,20 @@ describe('PostgreSQL schema migration', () => {
        SET finished_at = now()
        WHERE migration_name = '202608110001_initial_schema'`,
     );
+    expect(await status.isReady()).toBe(true);
+
     await pool.query(
       `INSERT INTO public._prisma_migrations
        (id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count)
        VALUES (gen_random_uuid()::text, 'test', NULL, 'unrelated_failed_migration', 'failed', NULL, now(), 0)`,
     );
     expect(await status.isReady()).toBe(false);
+
+    await pool.query(
+      `DELETE FROM public._prisma_migrations
+       WHERE migration_name = 'unrelated_failed_migration'`,
+    );
+    expect(await status.isReady()).toBe(true);
 
     await pool.query(
       `UPDATE public._prisma_migrations
