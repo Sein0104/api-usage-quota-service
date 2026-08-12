@@ -14,6 +14,11 @@ import { ProblemException } from './common/http/problem.exception.js';
 import { requestIdMiddleware } from './common/http/request-id.middleware.js';
 import { validateEnvironment } from './config/environment.schema.js';
 import { SystemAdminAuthenticator } from './system-admin/system-admin-authenticator.service.js';
+import { ApiKeyEarlyAuthorizer } from './api-keys/api-key-early-authorizer.service.js';
+import {
+  isApiKeyCreateRequest,
+  isUnregisteredApiKeyRoute,
+} from './api-keys/api-key-route.matcher.js';
 import {
   isSystemAdminProjectBootstrapRequest,
   isUnregisteredSystemAdminProjectDescendant,
@@ -37,8 +42,23 @@ export function configureApplication(app: INestApplication): void {
       app.get(SystemAdminAuthenticator).middleware(request, response, next);
       return;
     }
+    if (isApiKeyCreateRequest(request)) {
+      app.get(ApiKeyEarlyAuthorizer).middleware(request, response, next);
+      return;
+    }
     // New descendants must be added to this classifier with their own policy.
     if (isUnregisteredSystemAdminProjectDescendant(request)) {
+      next(
+        new ProblemException({
+          code: ProblemCode.ROUTE_NOT_FOUND,
+          detail: 'The requested route was not found.',
+          status: 404,
+          title: 'Route not found',
+        }),
+      );
+      return;
+    }
+    if (isUnregisteredApiKeyRoute(request)) {
       next(
         new ProblemException({
           code: ProblemCode.ROUTE_NOT_FOUND,

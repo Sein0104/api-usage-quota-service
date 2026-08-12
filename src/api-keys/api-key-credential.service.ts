@@ -27,10 +27,14 @@ export class ApiKeyCredentialService {
     const prefix = `mq_${id}`;
     const secret = this.random.randomBytes(32).toString('base64url');
     const plaintext = `${prefix}.${secret}`;
-    const digest = createHmac('sha256', this.pepper)
-      .update(plaintext, 'utf8')
-      .digest();
+    const digest = this.digest(plaintext);
 
     return { digest, id, plaintext, prefix };
+  }
+
+  digest(rawCredential: string): Buffer {
+    return createHmac('sha256', this.pepper)
+      .update(rawCredential, 'utf8')
+      .digest();
   }
 }

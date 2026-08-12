@@ -9,6 +9,16 @@ export interface ProjectCreatedAudit {
   requestId: string;
 }
 
+export interface ApiKeyCreatedAudit {
+  actorKeyId: string;
+  name: string;
+  prefix: string;
+  projectId: string;
+  requestId: string;
+  resourceApiKeyId: string;
+  scopes: string[];
+}
+
 @Injectable()
 export class AuditWriteRepository {
   async recordProjectCreated(
@@ -27,6 +37,26 @@ export class AuditWriteRepository {
         projectId: data.projectId,
         requestId: data.requestId,
         resourceApiKeyId: null,
+      },
+    });
+  }
+
+  async recordApiKeyCreated(
+    tx: Prisma.TransactionClient,
+    data: ApiKeyCreatedAudit,
+  ): Promise<void> {
+    await tx.auditLog.create({
+      data: {
+        action: AuditAction.API_KEY_CREATED,
+        actorKeyId: data.actorKeyId,
+        metadata: {
+          name: data.name,
+          prefix: data.prefix,
+          scopes: data.scopes,
+        },
+        projectId: data.projectId,
+        requestId: data.requestId,
+        resourceApiKeyId: data.resourceApiKeyId,
       },
     });
   }
