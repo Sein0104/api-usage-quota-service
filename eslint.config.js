@@ -10,6 +10,7 @@ export default [
     languageOptions: {
       globals: {
         afterAll: 'readonly',
+        afterEach: 'readonly',
         beforeAll: 'readonly',
         describe: 'readonly',
         expect: 'readonly',
