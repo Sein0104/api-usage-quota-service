@@ -12,7 +12,10 @@ import { PrismaService } from '../../src/database/prisma.service.js';
 import { ProjectBootstrapService } from '../../src/projects/project-bootstrap.service.js';
 import { cleanDatabase } from '../support/database-cleaner.js';
 import { createPostgresTestHarness } from '../support/postgres-test-harness.js';
-import { observeBarrierAndSettle } from '../support/concurrency-barrier.js';
+import {
+  acquireTransactionBarrier,
+  observeBarrierAndSettle,
+} from '../support/concurrency-barrier.js';
 
 jest.setTimeout(120_000);
 
@@ -127,11 +130,11 @@ describe('API key revoke concurrency', () => {
       { requestId: randomUUID() },
     );
 
-    const barrier = await setupPool.connect();
-    await barrier.query('BEGIN');
-    await barrier.query('SELECT id FROM api_keys WHERE id = $1 FOR UPDATE', [
-      target.apiKey.id,
-    ]);
+    const barrier = await acquireTransactionBarrier(
+      setupPool,
+      'SELECT id FROM api_keys WHERE id = $1 FOR UPDATE',
+      [target.apiKey.id],
+    );
     const revokes = Array.from({ length: 12 }, (_, index) =>
       track(
         service(index % 2 === 0 ? firstPrisma : secondPrisma).revoke(
@@ -188,11 +191,11 @@ describe('API key revoke concurrency', () => {
       );
     }
 
-    const barrier = await setupPool.connect();
-    await barrier.query('BEGIN');
-    await barrier.query('SELECT id FROM projects WHERE id = $1 FOR UPDATE', [
-      principal.projectId,
-    ]);
+    const barrier = await acquireTransactionBarrier(
+      setupPool,
+      'SELECT id FROM projects WHERE id = $1 FOR UPDATE',
+      [principal.projectId],
+    );
     const create = track(
       service(firstPrisma).create(
         principal,
