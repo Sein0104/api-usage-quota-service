@@ -21,4 +21,21 @@ describe('ApiKeyCredentialService', () => {
         .digest(),
     );
   });
+
+  it('derives the stored digest from a raw credential with the same HMAC format used for issuing', () => {
+    const service = new ApiKeyCredentialService('test-pepper', {
+      randomBytes: (size) => Buffer.alloc(size, 0xab),
+      randomUUID: () => '11111111-2222-4333-8444-555555555555',
+    });
+    const credential =
+      'mq_11111111-2222-4333-8444-555555555555.q6urq6urq6urq6urq6urq6urq6urq6urq6urq6urq6s';
+
+    expect(
+      (service as unknown as { digest(rawCredential: string): Buffer }).digest(
+        credential,
+      ),
+    ).toEqual(
+      createHmac('sha256', 'test-pepper').update(credential, 'utf8').digest(),
+    );
+  });
 });

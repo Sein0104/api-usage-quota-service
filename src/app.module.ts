@@ -4,6 +4,7 @@ import { EnvironmentModule } from './config/environment.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { HealthController } from './observability/health.controller.js';
 import { SystemAdminModule } from './system-admin/system-admin.module.js';
+import { ApiKeysModule } from './api-keys/api-keys.module.js';
 
 @Module({})
 export class AppModule {
@@ -13,6 +14,7 @@ export class AppModule {
       imports: [
         EnvironmentModule.forRoot(environment),
         DatabaseModule,
+        ApiKeysModule,
         SystemAdminModule,
       ],
       module: AppModule,

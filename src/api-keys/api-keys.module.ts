@@ -6,10 +6,27 @@ import {
 } from '../common/security/security.tokens.js';
 import { ENVIRONMENT } from '../config/environment.module.js';
 import type { Environment } from '../config/environment.schema.js';
+import { AuditModule } from '../audit/audit.module.js';
+import { DatabaseModule } from '../database/database.module.js';
 import { ApiKeyCredentialService } from './api-key-credential.service.js';
+import { ApiKeysController } from './api-keys.controller.js';
+import { ApiKeyEarlyAuthorizer } from './api-key-early-authorizer.service.js';
+import { ApiKeysRepository } from './api-keys.repository.js';
+import { ApiKeysService } from './api-keys.service.js';
+import { ApiKeyAuthGuard } from './auth/api-key-auth.guard.js';
+import { ApiKeyAuthService } from './auth/api-key-auth.service.js';
+import { ScopesGuard } from './auth/scopes.guard.js';
 
 @Module({
-  exports: [ApiKeyCredentialService],
+  controllers: [ApiKeysController],
+  exports: [
+    ApiKeyAuthGuard,
+    ApiKeyAuthService,
+    ApiKeyCredentialService,
+    ApiKeyEarlyAuthorizer,
+    ScopesGuard,
+  ],
+  imports: [AuditModule, DatabaseModule],
   providers: [
     {
       inject: [ENVIRONMENT],
@@ -22,6 +39,12 @@ import { ApiKeyCredentialService } from './api-key-credential.service.js';
       useValue: cryptoApiKeyCredentialRandom,
     },
     ApiKeyCredentialService,
+    ApiKeyAuthService,
+    ApiKeyAuthGuard,
+    ScopesGuard,
+    ApiKeyEarlyAuthorizer,
+    ApiKeysRepository,
+    ApiKeysService,
   ],
 })
 export class ApiKeysModule {}

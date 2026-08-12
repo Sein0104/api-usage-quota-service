@@ -1,4 +1,5 @@
 import type { ApiKey } from '../generated/prisma/client.js';
+import { canonicalizeApiScopes } from './api-key.scopes.js';
 
 export const INITIAL_ADMIN_SCOPES = [
   'usage:write',
@@ -20,7 +21,7 @@ export function presentApiKey(apiKey: ApiKey): {
     id: apiKey.id,
     name: apiKey.name,
     prefix: apiKey.prefix,
-    scopes: [...apiKey.scopes],
+    scopes: canonicalizeApiScopes(apiKey.scopes),
     status: apiKey.status,
     createdAt: apiKey.createdAt.toISOString(),
     revokedAt: apiKey.revokedAt?.toISOString() ?? null,
