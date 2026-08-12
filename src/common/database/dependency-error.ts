@@ -8,6 +8,7 @@ const connectionCodes = new Set([
   '57P02',
   '57P03',
 ]);
+const sqlStateConnectionException = /^08[A-Z0-9]{3}$/;
 
 export function isDatabaseDependencyError(error: unknown): boolean {
   if (typeof error !== 'object' || error === null || !('code' in error))
@@ -20,5 +21,9 @@ export function isDatabaseDependencyError(error: unknown): boolean {
       meta?: { driverAdapterError?: { cause?: { originalCode?: unknown } } };
     }
   ).meta?.driverAdapterError?.cause?.originalCode;
-  return typeof originalCode === 'string' && connectionCodes.has(originalCode);
+  return (
+    typeof originalCode === 'string' &&
+    (connectionCodes.has(originalCode) ||
+      sqlStateConnectionException.test(originalCode))
+  );
 }

@@ -19,6 +19,18 @@ describe('isDatabaseDependencyError', () => {
     expect(isDatabaseDependencyError(error)).toBe(true);
   });
 
+  it.each(['08001', '08004', '08007', '08P01'])(
+    'recognizes SQLSTATE connection exception class %s',
+    (originalCode) => {
+      expect(
+        isDatabaseDependencyError({
+          code: 'P2010',
+          meta: { driverAdapterError: { cause: { originalCode } } },
+        }),
+      ).toBe(true);
+    },
+  );
+
   it.each([
     [
       {
@@ -33,6 +45,12 @@ describe('isDatabaseDependencyError', () => {
       },
     ],
     [{ code: 'P2002' }],
+    [
+      {
+        code: 'P2010',
+        meta: { driverAdapterError: { cause: { originalCode: '0800' } } },
+      },
+    ],
   ])(
     'does not classify query or constraint errors as unavailable: %o',
     (error) => {

@@ -94,6 +94,23 @@ describe('POST /v1/api-keys', () => {
     });
     expect(created.body.apiKey).not.toHaveProperty('secretDigest');
     expect(created.body).not.toHaveProperty('digest');
+    expect(Object.keys(created.body)).toEqual(['apiKey', 'secret']);
+    expect(Object.keys(created.body.apiKey)).toEqual([
+      'id',
+      'name',
+      'prefix',
+      'scopes',
+      'status',
+      'createdAt',
+      'revokedAt',
+    ]);
+    expect(
+      Object.values(created.body).filter(
+        (value) => value === created.body.secret,
+      ),
+    ).toHaveLength(1);
+    expect(created.headers['content-type']).toContain('application/json');
+    expect(created.headers['x-request-id']).toMatch(/[0-9a-f-]{36}/);
     expect(created.headers['www-authenticate']).toBeUndefined();
   });
 
@@ -154,6 +171,30 @@ describe('POST /v1/api-keys', () => {
   });
 
   it('keeps 403 scope priority and only challenges 401 credential failures', async () => {
+    const malformed = await request(app.getHttpServer())
+      .post('/v1/api-keys')
+      .set('Authorization', `Bearer ${managerSecret}`)
+      .set('Content-Type', 'application/json')
+      .send('{');
+    expect(malformed).toMatchObject({
+      status: 400,
+      body: { code: 'VALIDATION_ERROR', requestId: expect.any(String) },
+    });
+    expect(malformed.headers['www-authenticate']).toBeUndefined();
+    expect(malformed.body.requestId).toBe(malformed.headers['x-request-id']);
+
+    const wrongSecret = `${managerSecret.slice(0, -1)}${managerSecret.endsWith('A') ? 'B' : 'A'}`;
+    const wrongSecretResponse = await request(app.getHttpServer())
+      .post('/v1/api-keys')
+      .set('Authorization', `Bearer ${wrongSecret}`)
+      .set('Content-Type', 'application/json')
+      .send('{');
+    expect(wrongSecretResponse).toMatchObject({
+      status: 401,
+      headers: { 'www-authenticate': 'Bearer' },
+      body: { code: 'INVALID_API_KEY' },
+    });
+
     const issued = await request(app.getHttpServer())
       .post('/v1/api-keys')
       .set('Authorization', `Bearer ${managerSecret}`)

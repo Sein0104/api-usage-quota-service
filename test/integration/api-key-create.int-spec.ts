@@ -67,20 +67,23 @@ describe('API key creation transaction', () => {
 
   it('commits a safe API_KEY_CREATED audit with its key', async () => {
     const principal = await actor();
+    const requestId = randomUUID();
     const created = await service(principal.credentials).create(
       principal,
       { name: 'created-key', scopes: ['audit:read', 'usage:read'] },
-      { requestId: randomUUID() },
+      { requestId },
     );
     const audit = await pool.query(
-      "SELECT action, actor_key_id, resource_api_key_id, metadata FROM audit_logs WHERE action = 'API_KEY_CREATED'",
+      "SELECT project_id, action, actor_key_id, resource_api_key_id, request_id, metadata FROM audit_logs WHERE action = 'API_KEY_CREATED'",
     );
     expect(created.apiKey.scopes).toEqual(['usage:read', 'audit:read']);
     expect(audit.rows).toEqual([
       expect.objectContaining({
+        project_id: principal.projectId,
         action: 'API_KEY_CREATED',
         actor_key_id: principal.id,
         resource_api_key_id: created.apiKey.id,
+        request_id: requestId,
         metadata: {
           name: 'created-key',
           prefix: created.apiKey.prefix,
@@ -89,6 +92,12 @@ describe('API key creation transaction', () => {
       }),
     ]);
     expect(JSON.stringify(audit.rows)).not.toContain(created.plaintext);
+    expect(JSON.stringify(audit.rows)).not.toContain(
+      created.apiKey.secretDigest?.toString(),
+    );
+    expect(JSON.stringify(audit.rows).toLowerCase()).not.toContain(
+      'authorization',
+    );
   });
 
   it('rolls back the created key when the audit writer fails', async () => {

@@ -35,6 +35,57 @@ describe('ApiKeyAuthService', () => {
     expect(prisma.apiKey.findFirst).not.toHaveBeenCalled();
   });
 
+  it('returns only a frozen minimal principal for an active matching key', async () => {
+    const row = {
+      id,
+      projectId: '22222222-2222-4333-8444-555555555555',
+      scopes: ['audit:read', 'usage:read'],
+      secretDigest: Buffer.alloc(32),
+    };
+    const principal = await service(row).authenticate(credential);
+    expect(principal).toEqual({
+      id,
+      projectId: '22222222-2222-4333-8444-555555555555',
+      scopes: ['usage:read', 'audit:read'],
+    });
+    expect(Object.isFrozen(principal)).toBe(true);
+    expect(Object.isFrozen(principal.scopes)).toBe(true);
+  });
+
+  it.each([
+    `mq_A${id.slice(1)}.${secret}`,
+    `mq_${id}.${secret}=`,
+    `mq_${id}.${secret}.extra`,
+    `mq_${id}. ${secret}`,
+    `mq_${id}.${secret.slice(1)}`,
+  ])(
+    'rejects malformed credential shape before database lookup: %s',
+    async (rawCredential) => {
+      const prisma = { apiKey: { findFirst: jest.fn() } };
+      const auth = new ApiKeyAuthService(
+        prisma as never,
+        { digest: jest.fn() } as never,
+      );
+      await expect(auth.authenticate(rawCredential)).rejects.toMatchObject({
+        problem: { code: 'INVALID_API_KEY' },
+      });
+      expect(prisma.apiKey.findFirst).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects a wrong secret for an existing id with the same credential problem', async () => {
+    const wrong = `mq_${id}.${'B'.repeat(43)}`;
+    const auth = service({
+      id,
+      projectId: id,
+      scopes: ['usage:read'],
+      secretDigest: Buffer.alloc(32, 1),
+    });
+    await expect(auth.authenticate(wrong)).rejects.toMatchObject({
+      problem: { code: 'INVALID_API_KEY' },
+    });
+  });
+
   it('calculates a candidate digest even when the key id is unknown', async () => {
     const digest = jest.fn().mockReturnValue(Buffer.alloc(32));
     const auth = new ApiKeyAuthService(
