@@ -16,6 +16,9 @@ import { cleanDatabase } from '../support/database-cleaner.js';
 import { FinalizeThenFailUsageRepository } from '../support/database-faults.js';
 import { FakeClock } from '../support/fake-clock.js';
 import { createPostgresTestHarness } from '../support/postgres-test-harness.js';
+import { IdempotencyRetry } from '../../src/usage/idempotency-retry.js';
+import { quotaTime } from '../../src/usage/domain/quota-time.js';
+import { MetricsService } from '../../src/observability/metrics.service.js';
 
 jest.setTimeout(120_000);
 
@@ -78,17 +81,22 @@ describe('usage transaction rollback', () => {
     );
   }
 
+  function service(repository: UsageRepository = new UsageRepository()) {
+    return new UsageService(
+      prisma,
+      repository,
+      new IdempotencyRetry(),
+      quotaTime,
+      new MetricsService(),
+    );
+  }
+
   it('rolls back an ACCEPTED finalization and lets the same key acquire ownership once', async () => {
     const principal = await actor(10);
     const key = randomUUID();
 
     await expect(
-      ingest(
-        new UsageService(prisma, new FinalizeThenFailUsageRepository()),
-        principal,
-        key,
-        2,
-      ),
+      ingest(service(new FinalizeThenFailUsageRepository()), principal, key, 2),
     ).rejects.toThrow('forced failure after usage finalization');
     await expect(counts(principal.projectId)).resolves.toMatchObject({
       rows: [{ count: 0, pending: 0 }],
@@ -100,14 +108,9 @@ describe('usage transaction rollback', () => {
       ),
     ).resolves.toMatchObject({ rows: [{ count: 0 }] });
 
-    await expect(
-      ingest(
-        new UsageService(prisma, new UsageRepository()),
-        principal,
-        key,
-        2,
-      ),
-    ).resolves.toMatchObject({ decision: 'ACCEPTED' });
+    await expect(ingest(service(), principal, key, 2)).resolves.toMatchObject({
+      decision: 'ACCEPTED',
+    });
     await expect(counts(principal.projectId)).resolves.toMatchObject({
       rows: [{ count: 1, pending: 0 }],
     });
@@ -123,7 +126,7 @@ describe('usage transaction rollback', () => {
 
     await expect(
       ingest(
-        new UsageService(prisma, new FinalizeThenFailUsageRepository()),
+        service(new FinalizeThenFailUsageRepository()),
         principal,
         randomUUID(),
         3,
@@ -167,7 +170,7 @@ describe('usage transaction rollback', () => {
     }
 
     const first = ingest(
-      new UsageService(prisma, new OpenThenRollbackRepository()),
+      service(new OpenThenRollbackRepository()),
       principal,
       key,
       2,
@@ -193,12 +196,7 @@ describe('usage transaction rollback', () => {
       } finally {
         if (insertionTimer !== undefined) clearTimer(insertionTimer);
       }
-      waiting = ingest(
-        new UsageService(prisma, new UsageRepository()),
-        principal,
-        key,
-        2,
-      );
+      waiting = ingest(service(), principal, key, 2);
       for (let attempt = 0; attempt < 80; attempt += 1) {
         const active = await pool.query<{ count: number }>(
           `SELECT count(*)::int AS count

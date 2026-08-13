@@ -13,6 +13,10 @@ import {
   type ApiScope,
 } from '../api-key.scopes.js';
 import type { AuthenticatedApiKey } from './authenticated-api-key.js';
+import {
+  MetricsService,
+  type ApiKeyAuthFailureReason,
+} from '../../observability/metrics.service.js';
 
 const credentialPattern =
   /^mq_([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.([A-Za-z0-9_-]{43})$/;
@@ -22,6 +26,7 @@ export class ApiKeyAuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly credentials: ApiKeyCredentialService,
+    private readonly metrics: MetricsService,
   ) {}
 
   async authenticate(
@@ -32,12 +37,12 @@ export class ApiKeyAuthService {
         ? undefined
         : credentialPattern.exec(rawCredential);
     if (match === null || match === undefined) {
-      throw this.invalidCredential();
+      throw this.invalidCredential('MISSING_OR_MALFORMED');
     }
     const credential = rawCredential!;
     const secret = Buffer.from(match[2], 'base64url');
     if (secret.length !== 32 || secret.toString('base64url') !== match[2]) {
-      throw this.invalidCredential();
+      throw this.invalidCredential('MISSING_OR_MALFORMED');
     }
     const candidateDigest = this.credentials.digest(credential);
 
@@ -67,7 +72,7 @@ export class ApiKeyAuthService {
         new Set(row.scopes).size !== row.scopes.length ||
         !digestMatches
       ) {
-        throw this.invalidCredential();
+        throw this.invalidCredential('INVALID_OR_REVOKED');
       }
 
       const scopes = canonicalizeApiScopes(row.scopes);
@@ -92,7 +97,12 @@ export class ApiKeyAuthService {
     }
   }
 
-  private invalidCredential(): ProblemException {
+  private invalidCredential(reason: ApiKeyAuthFailureReason): ProblemException {
+    try {
+      this.metrics.recordApiKeyAuthFailure(reason);
+    } catch {
+      // Authentication semantics must not depend on metrics availability.
+    }
     return new ProblemException({
       code: ProblemCode.INVALID_API_KEY,
       detail: 'The API key credential is invalid.',

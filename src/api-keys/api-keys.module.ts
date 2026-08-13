@@ -6,7 +6,7 @@ import {
 } from '../common/security/security.tokens.js';
 import { ENVIRONMENT } from '../config/environment.module.js';
 import type { Environment } from '../config/environment.schema.js';
-import { AuditModule } from '../audit/audit.module.js';
+import { AuditWriteModule } from '../audit/audit-write.module.js';
 import { DatabaseModule } from '../database/database.module.js';
 import { ApiKeyCredentialService } from './api-key-credential.service.js';
 import { ApiKeysController } from './api-keys.controller.js';
@@ -27,7 +27,7 @@ import { CursorCodec } from '../common/pagination/cursor-codec.js';
     ApiKeyEarlyAuthorizer,
     ScopesGuard,
   ],
-  imports: [AuditModule, DatabaseModule],
+  imports: [AuditWriteModule, DatabaseModule],
   providers: [
     {
       inject: [ENVIRONMENT],

@@ -24,6 +24,9 @@ import {
   isUnregisteredSystemAdminProjectDescendant,
 } from './system-admin/system-admin-route.matcher.js';
 import { parseIdempotencyKey } from './usage/http/idempotency-key.js';
+import { HttpObservabilityMiddleware } from './observability/http-observability.middleware.js';
+import { Logger } from 'nestjs-pino';
+import { configureOpenApi } from './openapi.js';
 
 function toValidationErrors(
   errors: ValidationError[],
@@ -36,6 +39,11 @@ function toValidationErrors(
 
 export function configureApplication(app: INestApplication): void {
   app.use(requestIdMiddleware);
+  app.use(
+    app
+      .get(HttpObservabilityMiddleware)
+      .use.bind(app.get(HttpObservabilityMiddleware)),
+  );
   // This unmounted matcher avoids Express prefix-mount semantics so only the
   // real operation authenticates before JSON parsing; unknown routes stay 404.
   app.use((request: Request, response: Response, next: NextFunction) => {
@@ -95,6 +103,7 @@ export function configureApplication(app: INestApplication): void {
     exclude: [
       { path: 'health/live', method: RequestMethod.GET },
       { path: 'health/ready', method: RequestMethod.GET },
+      { path: 'metrics', method: RequestMethod.GET },
     ],
   });
   app.useGlobalPipes(
@@ -117,9 +126,13 @@ export function configureApplication(app: INestApplication): void {
 
 async function bootstrap(): Promise<void> {
   const environment = validateEnvironment(process.env);
-  const app = await NestFactory.create(AppModule.forRoot(environment));
+  const app = await NestFactory.create(AppModule.forRoot(environment), {
+    bufferLogs: true,
+  });
 
   configureApplication(app);
+  configureOpenApi(app, environment);
+  app.useLogger(app.get(Logger));
   app.enableShutdownHooks();
   await app.listen(environment.PORT);
 }

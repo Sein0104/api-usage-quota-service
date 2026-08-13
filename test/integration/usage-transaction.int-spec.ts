@@ -10,6 +10,9 @@ import { payloadHash } from '../../src/usage/domain/payload-hash.js';
 import type { AuthenticatedApiKey } from '../../src/api-keys/auth/authenticated-api-key.js';
 import { cleanDatabase } from '../support/database-cleaner.js';
 import { createPostgresTestHarness } from '../support/postgres-test-harness.js';
+import { IdempotencyRetry } from '../../src/usage/idempotency-retry.js';
+import { quotaTime } from '../../src/usage/domain/quota-time.js';
+import { MetricsService } from '../../src/observability/metrics.service.js';
 
 jest.setTimeout(120_000);
 
@@ -80,12 +83,22 @@ describe('usage ingest transaction', () => {
     });
   }
 
+  function service(repository: UsageRepository = new UsageRepository()) {
+    return new UsageService(
+      prisma,
+      repository,
+      new IdempotencyRetry(),
+      quotaTime,
+      new MetricsService(),
+    );
+  }
+
   it('commits accepted and quota-exceeded terminal rows without increasing quota on rejection', async () => {
     const actor = await createActor(3);
-    const service = new UsageService(prisma, new UsageRepository());
+    const usage = service();
 
-    const accepted = await ingest(service, actor, randomUUID(), 3);
-    const exceeded = await ingest(service, actor, randomUUID(), 1);
+    const accepted = await ingest(usage, actor, randomUUID(), 3);
+    const exceeded = await ingest(usage, actor, randomUUID(), 1);
 
     expect(accepted).toMatchObject({
       decision: 'ACCEPTED',
@@ -122,12 +135,12 @@ describe('usage ingest transaction', () => {
 
   it('replays a quota-exceeded snapshot without a second quota change', async () => {
     const actor = await createActor(2);
-    const service = new UsageService(prisma, new UsageRepository());
-    await ingest(service, actor, randomUUID(), 2);
+    const usage = service();
+    await ingest(usage, actor, randomUUID(), 2);
     const key = randomUUID();
 
-    const first = await ingest(service, actor, key, 1);
-    const replay = await ingest(service, actor, key, 1);
+    const first = await ingest(usage, actor, key, 1);
+    const replay = await ingest(usage, actor, key, 1);
 
     expect(replay).toEqual(first);
     expect(replay).toMatchObject({
@@ -142,10 +155,10 @@ describe('usage ingest transaction', () => {
 
   it('keeps the partial remaining snapshot when the next request exceeds quota', async () => {
     const actor = await createActor(5);
-    const service = new UsageService(prisma, new UsageRepository());
-    await ingest(service, actor, randomUUID(), 3);
+    const usage = service();
+    await ingest(usage, actor, randomUUID(), 3);
 
-    const exceeded = await ingest(service, actor, randomUUID(), 3);
+    const exceeded = await ingest(usage, actor, randomUUID(), 3);
 
     expect(exceeded).toMatchObject({
       decision: 'QUOTA_EXCEEDED',
@@ -158,12 +171,7 @@ describe('usage ingest transaction', () => {
 
   it('creates a zero-used daily row when the first request exceeds quota', async () => {
     const actor = await createActor(2);
-    const exceeded = await ingest(
-      new UsageService(prisma, new UsageRepository()),
-      actor,
-      randomUUID(),
-      3,
-    );
+    const exceeded = await ingest(service(), actor, randomUUID(), 3);
 
     expect(exceeded).toMatchObject({
       decision: 'QUOTA_EXCEEDED',
@@ -177,11 +185,11 @@ describe('usage ingest transaction', () => {
   it('replays the same project terminal across API keys while retaining the original key id', async () => {
     const actor = await createActor(10);
     const other = await createOtherKey(actor);
-    const service = new UsageService(prisma, new UsageRepository());
+    const usage = service();
     const key = randomUUID();
 
-    const first = await ingest(service, actor, key, 4);
-    const replay = await ingest(service, other, key, 4);
+    const first = await ingest(usage, actor, key, 4);
+    const replay = await ingest(usage, other, key, 4);
 
     expect(replay).toEqual(first);
     await expect(
@@ -198,11 +206,11 @@ describe('usage ingest transaction', () => {
 
   it('rejects a different payload for the same project key without changing quota', async () => {
     const actor = await createActor(10);
-    const service = new UsageService(prisma, new UsageRepository());
+    const usage = service();
     const key = randomUUID();
-    await ingest(service, actor, key, 2);
+    await ingest(usage, actor, key, 2);
 
-    await expect(ingest(service, actor, key, 3)).rejects.toMatchObject({
+    await expect(ingest(usage, actor, key, 3)).rejects.toMatchObject({
       problem: { code: 'IDEMPOTENCY_KEY_REUSED', status: 409 },
     });
     await expect(
@@ -216,11 +224,11 @@ describe('usage ingest transaction', () => {
   it('treats the same idempotency key in another project independently', async () => {
     const firstActor = await createActor(10, 'first-project');
     const secondActor = await createActor(20, 'second-project');
-    const service = new UsageService(prisma, new UsageRepository());
+    const usage = service();
     const key = randomUUID();
 
-    const first = await ingest(service, firstActor, key, 2);
-    const second = await ingest(service, secondActor, key, 5);
+    const first = await ingest(usage, firstActor, key, 2);
+    const second = await ingest(usage, secondActor, key, 5);
 
     expect(first.eventId).not.toBe(second.eventId);
     await expect(
@@ -247,9 +255,9 @@ describe('usage ingest transaction', () => {
         throw new Error('forced finalization failure');
       }
     }
-    const service = new UsageService(prisma, new FailingRepository());
+    const usage = service(new FailingRepository());
 
-    await expect(ingest(service, actor, randomUUID(), 2)).rejects.toThrow(
+    await expect(ingest(usage, actor, randomUUID(), 2)).rejects.toThrow(
       'forced finalization failure',
     );
     await expect(
@@ -267,12 +275,9 @@ describe('usage ingest transaction', () => {
         return null;
       }
     }
-    const service = new UsageService(
-      prisma,
-      new MissingFinalizationRepository(),
-    );
+    const usage = service(new MissingFinalizationRepository());
 
-    await expect(ingest(service, actor, randomUUID(), 2)).rejects.toThrow(
+    await expect(ingest(usage, actor, randomUUID(), 2)).rejects.toThrow(
       'Usage event finalization invariant violated.',
     );
     await expect(
@@ -286,13 +291,7 @@ describe('usage ingest transaction', () => {
   it('finalizes no earlier than a future captured receivedAt', async () => {
     const actor = await createActor(10);
     const receivedAt = new Date('2099-12-31T23:59:59.999Z');
-    await ingest(
-      new UsageService(prisma, new UsageRepository()),
-      actor,
-      randomUUID(),
-      1,
-      receivedAt,
-    );
+    await ingest(service(), actor, randomUUID(), 1, receivedAt);
 
     await expect(
       pool.query('SELECT received_at, finalized_at FROM usage_events'),
@@ -318,15 +317,9 @@ describe('usage ingest transaction', () => {
       [actor.projectId, actor.id, key, payloadHash(2), receivedAt],
     );
 
-    await expect(
-      ingest(
-        new UsageService(prisma, new UsageRepository()),
-        actor,
-        key,
-        2,
-        receivedAt,
-      ),
-    ).rejects.toThrow('Committed PENDING usage event invariant violated.');
+    await expect(ingest(service(), actor, key, 2, receivedAt)).rejects.toThrow(
+      'Committed PENDING usage event invariant violated.',
+    );
     await expect(
       pool.query('SELECT decision FROM usage_events WHERE project_id = $1', [
         actor.projectId,

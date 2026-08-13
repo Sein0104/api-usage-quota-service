@@ -8,6 +8,7 @@ import { ProblemException } from '../../src/common/http/problem.exception.js';
 import { cryptoApiKeyCredentialRandom } from '../../src/common/security/security.tokens.js';
 import { PrismaService } from '../../src/database/prisma.service.js';
 import { ProjectBootstrapService } from '../../src/projects/project-bootstrap.service.js';
+import { MetricsService } from '../../src/observability/metrics.service.js';
 import { cleanDatabase } from '../support/database-cleaner.js';
 import { createPostgresTestHarness } from '../support/postgres-test-harness.js';
 
@@ -41,6 +42,7 @@ describe('Project bootstrap transaction', () => {
       prisma,
       new ApiKeyCredentialService('p'.repeat(43), cryptoApiKeyCredentialRandom),
       auditWriter,
+      new MetricsService(),
     );
   }
 
@@ -156,6 +158,7 @@ describe('Project bootstrap transaction', () => {
       unavailablePrisma,
       new ApiKeyCredentialService('p'.repeat(43), cryptoApiKeyCredentialRandom),
       new AuditWriteRepository(),
+      new MetricsService(),
     );
 
     await expect(

@@ -6,7 +6,8 @@ export default {
   },
   rootDir: '.',
   testEnvironment: 'node',
-  testRegex: '.*(\\.spec|\\.e2e-spec|\\.int-spec|\\.concurrent-spec)\\.ts$',
+  testRegex:
+    '.*(\\.spec|\\.e2e-spec|\\.int-spec|\\.concurrent-spec|\\.contract-spec|\\.security-spec)\\.ts$',
   transform: {
     '^.+\\.ts$': ['ts-jest', { useESM: true }],
   },

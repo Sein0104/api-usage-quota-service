@@ -10,6 +10,7 @@ import { CursorCodec } from '../../src/common/pagination/cursor-codec.js';
 import { cryptoApiKeyCredentialRandom } from '../../src/common/security/security.tokens.js';
 import { PrismaService } from '../../src/database/prisma.service.js';
 import { ProjectBootstrapService } from '../../src/projects/project-bootstrap.service.js';
+import { MetricsService } from '../../src/observability/metrics.service.js';
 import { cleanDatabase } from '../support/database-cleaner.js';
 import { createPostgresTestHarness } from '../support/postgres-test-harness.js';
 import {
@@ -103,6 +104,7 @@ describe('API key revoke concurrency', () => {
       new ApiKeysRepository(),
       new AuditWriteRepository(),
       new CursorCodec(),
+      new MetricsService(),
     );
   }
 
@@ -111,6 +113,7 @@ describe('API key revoke concurrency', () => {
       setupPrisma,
       credentials,
       new AuditWriteRepository(),
+      new MetricsService(),
     ).bootstrap(
       { dailyQuotaUnits: 1000, name: 'concurrency-project' },
       { requestId: randomUUID() },
