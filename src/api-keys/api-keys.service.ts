@@ -13,6 +13,10 @@ import { CursorCodec } from '../common/pagination/cursor-codec.js';
 import type { PageRequest, CursorPage } from '../common/pagination/page.js';
 import { buildCursorPage } from '../common/pagination/page.js';
 import { presentApiKey } from './api-key.presenter.js';
+import {
+  MetricsService,
+  type TransactionKind,
+} from '../observability/metrics.service.js';
 
 export interface CreateApiKeyCommand {
   name: string;
@@ -31,8 +35,8 @@ export interface CreateApiKeyResult {
 function validateCommand(command: CreateApiKeyCommand): ApiScope[] {
   if (
     typeof command.name !== 'string' ||
-    command.name.length < 1 ||
-    command.name.length > 100 ||
+    Array.from(command.name).length < 1 ||
+    Array.from(command.name).length > 100 ||
     command.name.trim() !== command.name
   )
     throw validationError();
@@ -68,6 +72,7 @@ export class ApiKeysService {
     private readonly repository: ApiKeysRepository,
     private readonly auditWriter: AuditWriteRepository,
     private readonly cursorCodec: CursorCodec = new CursorCodec(),
+    private readonly metrics: MetricsService,
   ) {}
 
   async create(
@@ -77,6 +82,7 @@ export class ApiKeysService {
   ): Promise<CreateApiKeyResult> {
     const scopes = validateCommand(command);
     const issued = this.credentials.issue();
+    const startedAt = process.hrtime.bigint();
     try {
       return await this.prisma.$transaction(async (tx) => {
         await this.repository.lockProject(tx, actor.projectId);
@@ -124,6 +130,8 @@ export class ApiKeysService {
         status: 503,
         title: 'Dependency unavailable',
       });
+    } finally {
+      this.observeTransaction('API_KEY_CREATE', startedAt);
     }
   }
 
@@ -157,6 +165,7 @@ export class ApiKeysService {
     id: string,
     context: ApiKeyCreateContext,
   ): Promise<void> {
+    const startedAt = process.hrtime.bigint();
     try {
       await this.prisma.$transaction(async (tx) => {
         await this.repository.lockProject(tx, actor.projectId);
@@ -195,6 +204,22 @@ export class ApiKeysService {
       });
     } catch (error) {
       this.rethrowDatabaseError(error);
+    } finally {
+      this.observeTransaction('API_KEY_REVOKE', startedAt);
+    }
+  }
+
+  private observeTransaction(
+    transaction: TransactionKind,
+    startedAt: bigint,
+  ): void {
+    try {
+      this.metrics.observeTransaction(
+        transaction,
+        Number(process.hrtime.bigint() - startedAt) / 1_000_000_000,
+      );
+    } catch {
+      // Metrics must never replace a transaction outcome.
     }
   }
 

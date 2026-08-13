@@ -9,6 +9,8 @@ import { AuditWriteRepository } from '../../src/audit/audit-write.repository.js'
 import { cryptoApiKeyCredentialRandom } from '../../src/common/security/security.tokens.js';
 import { PrismaService } from '../../src/database/prisma.service.js';
 import { ProjectBootstrapService } from '../../src/projects/project-bootstrap.service.js';
+import { CursorCodec } from '../../src/common/pagination/cursor-codec.js';
+import { MetricsService } from '../../src/observability/metrics.service.js';
 import { cleanDatabase } from '../support/database-cleaner.js';
 import { createPostgresTestHarness } from '../support/postgres-test-harness.js';
 
@@ -42,6 +44,7 @@ describe('API key creation transaction', () => {
       prisma,
       credentials,
       new AuditWriteRepository(),
+      new MetricsService(),
     ).bootstrap(
       { dailyQuotaUnits: 1000, name: 'transaction-project' },
       { requestId: randomUUID() },
@@ -63,6 +66,8 @@ describe('API key creation transaction', () => {
       credentials,
       new ApiKeysRepository(),
       writer,
+      new CursorCodec(),
+      new MetricsService(),
     );
   }
 

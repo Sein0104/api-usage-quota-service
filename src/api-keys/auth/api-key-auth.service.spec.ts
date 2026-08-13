@@ -1,6 +1,7 @@
 import { Buffer } from 'node:buffer';
 import { jest } from '@jest/globals';
 import { ApiKeyAuthService } from './api-key-auth.service.js';
+import { MetricsService } from '../../observability/metrics.service.js';
 import { ProblemException } from '../../common/http/problem.exception.js';
 
 const id = '11111111-2222-4333-8444-555555555555';
@@ -16,6 +17,7 @@ describe('ApiKeyAuthService', () => {
         },
       } as never,
       { digest: jest.fn().mockReturnValue(digest) } as never,
+      new MetricsService(),
     );
   }
 
@@ -27,6 +29,7 @@ describe('ApiKeyAuthService', () => {
       {
         digest: jest.fn().mockReturnValue(Buffer.alloc(32)),
       } as never,
+      new MetricsService(),
     );
 
     await expect(auth.authenticate(nonCanonical)).rejects.toMatchObject<
@@ -65,6 +68,7 @@ describe('ApiKeyAuthService', () => {
       const auth = new ApiKeyAuthService(
         prisma as never,
         { digest: jest.fn() } as never,
+        new MetricsService(),
       );
       await expect(auth.authenticate(rawCredential)).rejects.toMatchObject({
         problem: { code: 'INVALID_API_KEY' },
@@ -84,6 +88,7 @@ describe('ApiKeyAuthService', () => {
     const auth = new ApiKeyAuthService(
       { apiKey: { findFirst } } as never,
       { digest: jest.fn().mockReturnValue(Buffer.alloc(32)) } as never,
+      new MetricsService(),
     );
     await expect(auth.authenticate(wrong)).rejects.toMatchObject({
       problem: { code: 'INVALID_API_KEY' },
@@ -102,6 +107,7 @@ describe('ApiKeyAuthService', () => {
         },
       } as never,
       { digest } as never,
+      new MetricsService(),
     );
 
     await expect(auth.authenticate(credential)).rejects.toMatchObject({
@@ -136,5 +142,40 @@ describe('ApiKeyAuthService', () => {
     await expect(syntax.authenticate(credential)).rejects.toMatchObject({
       code: 'P2010',
     });
+  });
+
+  it('counts malformed and invalid credentials without counting dependency failures', async () => {
+    const metrics = new MetricsService();
+    const prisma = {
+      apiKey: {
+        findFirst: jest
+          .fn<() => Promise<unknown>>()
+          .mockResolvedValueOnce(null)
+          .mockRejectedValueOnce({ code: '08006' }),
+      },
+    };
+    const auth = new ApiKeyAuthService(
+      prisma as never,
+      { digest: jest.fn().mockReturnValue(Buffer.alloc(32)) } as never,
+      metrics,
+    );
+
+    await expect(auth.authenticate(undefined)).rejects.toBeInstanceOf(
+      ProblemException,
+    );
+    await expect(auth.authenticate(credential)).rejects.toBeInstanceOf(
+      ProblemException,
+    );
+    await expect(auth.authenticate(credential)).rejects.toMatchObject({
+      problem: { code: 'DEPENDENCY_UNAVAILABLE' },
+    });
+
+    const exposition = await metrics.exposition();
+    expect(exposition).toContain(
+      'api_key_auth_failures_total{reason="MISSING_OR_MALFORMED"} 1',
+    );
+    expect(exposition).toContain(
+      'api_key_auth_failures_total{reason="INVALID_OR_REVOKED"} 1',
+    );
   });
 });

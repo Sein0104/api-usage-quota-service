@@ -1,5 +1,10 @@
 import Joi from 'joi';
 
+const bearerTokenSchema = Joi.string()
+  .min(43)
+  .pattern(/^[\x21-\x7e]+$/)
+  .required();
+
 export interface Environment {
   API_KEY_PEPPER: string;
   DATABASE_URL: string;
@@ -16,9 +21,9 @@ export const environmentSchema = Joi.object({
   NODE_ENV: Joi.string().valid('development', 'test', 'production').required(),
   PORT: Joi.number().port().required(),
   DATABASE_URL: Joi.string().uri().required(),
-  SYSTEM_ADMIN_TOKEN: Joi.string().min(43).required(),
+  SYSTEM_ADMIN_TOKEN: bearerTokenSchema,
   API_KEY_PEPPER: Joi.string().min(43).required(),
-  METRICS_TOKEN: Joi.string().min(43).required(),
+  METRICS_TOKEN: bearerTokenSchema,
   LOG_LEVEL: Joi.string()
     .valid('fatal', 'error', 'warn', 'info', 'debug', 'trace')
     .required(),
@@ -43,5 +48,16 @@ export function validateEnvironment(
     throw new Error(`Environment validation failed: ${error.message}`);
   }
 
-  return value as Environment;
+  const environment = value as Environment;
+  if (
+    environment.METRICS_TOKEN === environment.SYSTEM_ADMIN_TOKEN ||
+    environment.METRICS_TOKEN === environment.API_KEY_PEPPER ||
+    environment.SYSTEM_ADMIN_TOKEN === environment.API_KEY_PEPPER
+  ) {
+    throw new Error(
+      'Environment validation failed: security values must be distinct',
+    );
+  }
+
+  return environment;
 }

@@ -10,6 +10,7 @@ import {
 import { ApiKeyCredentialService } from '../api-keys/api-key-credential.service.js';
 import { INITIAL_ADMIN_SCOPES } from '../api-keys/api-key.presenter.js';
 import { PrismaService } from '../database/prisma.service.js';
+import { MetricsService } from '../observability/metrics.service.js';
 
 export interface ProjectBootstrapCommand {
   dailyQuotaUnits: number;
@@ -52,6 +53,7 @@ export class ProjectBootstrapService {
     private readonly prisma: PrismaService,
     private readonly credentials: ApiKeyCredentialService,
     private readonly auditWriter: AuditWriteRepository,
+    private readonly metrics: MetricsService,
   ) {}
 
   async bootstrap(
@@ -59,6 +61,7 @@ export class ProjectBootstrapService {
     context: ProjectBootstrapContext,
   ): Promise<ProjectBootstrapResult> {
     const issued = this.credentials.issue();
+    const startedAt = process.hrtime.bigint();
 
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -100,6 +103,15 @@ export class ProjectBootstrapService {
         });
       }
       throw error;
+    } finally {
+      try {
+        this.metrics.observeTransaction(
+          'PROJECT_BOOTSTRAP',
+          Number(process.hrtime.bigint() - startedAt) / 1_000_000_000,
+        );
+      } catch {
+        // Metrics must never replace the transaction outcome.
+      }
     }
   }
 }

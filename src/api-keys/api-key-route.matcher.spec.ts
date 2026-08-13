@@ -88,4 +88,27 @@ describe('API key route policy', () => {
       expect(isUnregisteredApiKeyRoute(request(method, url))).toBe(true);
     },
   );
+
+  it.each([
+    ['GET', '/v1/audit-logs'],
+    ['GET', '/v1/audit-logs/'],
+    ['GET', '/v1/AUDIT-LOGS?limit=10'],
+  ])('authenticates the exact audit operation %s %s', (method, url) => {
+    expect(apiKeyRoutePolicy(request(method, url))).toEqual({
+      requiredScopes: ['audit:read'],
+    });
+    expect(isUnregisteredApiKeyRoute(request(method, url))).toBe(false);
+  });
+
+  it.each([
+    ['POST', '/v1/audit-logs'],
+    ['GET', '/v1/audit-logs/child'],
+    ['DELETE', '/v1/audit-logs/child/grandchild'],
+  ])(
+    'keeps unknown audit namespace routes parser-before 404: %s %s',
+    (method, url) => {
+      expect(apiKeyRoutePolicy(request(method, url))).toBeNull();
+      expect(isUnregisteredApiKeyRoute(request(method, url))).toBe(true);
+    },
+  );
 });

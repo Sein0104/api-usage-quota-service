@@ -26,15 +26,38 @@ import {
   presentDailyUsage,
   type DailyUsageItem,
 } from './daily-usage.presenter.js';
+import { ApiHeader, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
+import {
+  ApiProblemResponses,
+  ApiProjectSecurity,
+} from '../openapi.decorators.js';
+import {
+  AcceptedUsageResponseModel,
+  DailyUsageResponseModel,
+} from '../openapi.models.js';
 
 @Controller('usage-events')
 @UseGuards(ApiKeyAuthGuard, ScopesGuard, JsonContentTypeGuard)
+@ApiTags('usage')
+@ApiProjectSecurity()
 export class UsageController {
   constructor(private readonly usage: UsageService) {}
 
   @Post()
   @HttpCode(200)
   @RequiredScopes('usage:write')
+  @ApiHeader({
+    name: 'Idempotency-Key',
+    required: true,
+    schema: {
+      format: 'uuid',
+      pattern:
+        '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+      type: 'string',
+    },
+  })
+  @ApiOkResponse({ type: AcceptedUsageResponseModel })
+  @ApiProblemResponses(400, 401, 403, 409, 415, 429, 500, 503)
   async ingest(
     @CurrentApiKey() actor: AuthenticatedApiKey,
     @Body() body: CreateUsageEventDto,
@@ -63,11 +86,31 @@ export class UsageController {
 
 @Controller('usage')
 @UseGuards(ApiKeyAuthGuard, ScopesGuard)
+@ApiTags('usage')
+@ApiProjectSecurity()
 export class DailyUsageController {
   constructor(private readonly dailyUsage: DailyUsageService) {}
 
   @Get('daily')
   @RequiredScopes('usage:read')
+  @ApiQuery({
+    description:
+      'Inclusive range start as one canonical UTC YYYY-MM-DD date. Duplicate and unknown query fields are rejected; the inclusive range may span at most 90 days.',
+    format: 'date',
+    name: 'from',
+    required: true,
+    type: String,
+  })
+  @ApiQuery({
+    description:
+      'Inclusive range end as one canonical UTC YYYY-MM-DD date. It must be on or after from; duplicate and unknown query fields are rejected; the inclusive range may span at most 90 days.',
+    format: 'date',
+    name: 'to',
+    required: true,
+    type: String,
+  })
+  @ApiOkResponse({ type: DailyUsageResponseModel })
+  @ApiProblemResponses(400, 401, 403, 500, 503)
   async list(
     @CurrentApiKey() actor: AuthenticatedApiKey,
     @Req() request: Request,

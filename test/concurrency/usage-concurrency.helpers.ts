@@ -5,6 +5,9 @@ import type { AuthenticatedApiKey } from '../../src/api-keys/auth/authenticated-
 import { PrismaService } from '../../src/database/prisma.service.js';
 import { UsageRepository } from '../../src/usage/usage.repository.js';
 import { UsageService } from '../../src/usage/usage.service.js';
+import { IdempotencyRetry } from '../../src/usage/idempotency-retry.js';
+import { quotaTime } from '../../src/usage/domain/quota-time.js';
+import { MetricsService } from '../../src/observability/metrics.service.js';
 
 export async function createUsageActor(
   pool: Pool,
@@ -26,7 +29,13 @@ export async function createUsageActor(
 }
 
 export function usageService(prisma: PrismaService): UsageService {
-  return new UsageService(prisma, new UsageRepository());
+  return new UsageService(
+    prisma,
+    new UsageRepository(),
+    new IdempotencyRetry(),
+    quotaTime,
+    new MetricsService(),
+  );
 }
 
 export function concurrently<T>(operations: readonly (() => Promise<T>)[]) {

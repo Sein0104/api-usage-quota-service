@@ -53,6 +53,61 @@ describe('validateEnvironment', () => {
       ).toBe(expected);
     },
   );
+
+  it('rejects reuse of the metrics token as another credential', () => {
+    expect(() =>
+      validateEnvironment({
+        ...requiredEnvironment,
+        METRICS_TOKEN: requiredEnvironment.SYSTEM_ADMIN_TOKEN,
+      }),
+    ).toThrow();
+    expect(() =>
+      validateEnvironment({
+        ...requiredEnvironment,
+        METRICS_TOKEN: requiredEnvironment.API_KEY_PEPPER,
+      }),
+    ).toThrow();
+  });
+
+  it('rejects reuse of the system admin token as the API key pepper', () => {
+    expect(() =>
+      validateEnvironment({
+        ...requiredEnvironment,
+        API_KEY_PEPPER: requiredEnvironment.SYSTEM_ADMIN_TOKEN,
+      }),
+    ).toThrow('security values must be distinct');
+  });
+
+  it.each(['SYSTEM_ADMIN_TOKEN', 'METRICS_TOKEN'] as const)(
+    'rejects non-visible-ASCII %s values before startup',
+    (field) => {
+      for (const token of [
+        ' '.repeat(43),
+        `${'a'.repeat(42)} `,
+        `${'a'.repeat(42)}\t`,
+        '😀'.repeat(43),
+      ]) {
+        expect(() =>
+          validateEnvironment({
+            ...requiredEnvironment,
+            [field]: token,
+          }),
+        ).toThrow('Environment validation failed');
+      }
+    },
+  );
+
+  it.each(['SYSTEM_ADMIN_TOKEN', 'METRICS_TOKEN'] as const)(
+    'accepts visible ASCII punctuation in %s',
+    (field) => {
+      expect(
+        validateEnvironment({
+          ...requiredEnvironment,
+          [field]: '!'.repeat(43),
+        })[field],
+      ).toBe('!'.repeat(43));
+    },
+  );
 });
 
 describe('systemClock', () => {

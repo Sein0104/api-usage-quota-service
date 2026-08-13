@@ -6,6 +6,7 @@ interface RequestTarget {
 const collectionPaths = new Set(['/v1/api-keys', '/v1/api-keys/']);
 const usageEventPaths = new Set(['/v1/usage-events', '/v1/usage-events/']);
 const dailyUsagePaths = new Set(['/v1/usage/daily', '/v1/usage/daily/']);
+const auditLogPaths = new Set(['/v1/audit-logs', '/v1/audit-logs/']);
 
 function pathOf(request: RequestTarget): string {
   return request.originalUrl.split('?', 1)[0].toLowerCase();
@@ -41,6 +42,9 @@ export function apiKeyRoutePolicy(
   if (request.method === 'GET' && dailyUsagePaths.has(pathOf(request))) {
     return { requiredScopes: ['usage:read'] };
   }
+  if (request.method === 'GET' && auditLogPaths.has(pathOf(request))) {
+    return { requiredScopes: ['audit:read'] };
+  }
   return null;
 }
 
@@ -53,6 +57,8 @@ export function isUnregisteredApiKeyRoute(request: RequestTarget): boolean {
       path === '/v1/usage-events' ||
       path.startsWith('/v1/usage-events/') ||
       path === '/v1/usage' ||
-      path.startsWith('/v1/usage/'))
+      path.startsWith('/v1/usage/') ||
+      path === '/v1/audit-logs' ||
+      path.startsWith('/v1/audit-logs/'))
   );
 }
