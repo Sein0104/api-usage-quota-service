@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   Post,
   Req,
@@ -19,6 +20,12 @@ import { QuotaExceededException } from './quota-exceeded.exception.js';
 import type { UsageResponse } from './quota-response.js';
 import { presentUsageTerminal } from './usage.presenter.js';
 import { UsageService } from './usage.service.js';
+import { DailyUsageService } from './daily-usage.service.js';
+import { parseListDailyUsageQuery } from './dto/list-daily-usage.query.js';
+import {
+  presentDailyUsage,
+  type DailyUsageItem,
+} from './daily-usage.presenter.js';
 
 @Controller('usage-events')
 @UseGuards(ApiKeyAuthGuard, ScopesGuard, JsonContentTypeGuard)
@@ -51,5 +58,25 @@ export class UsageController {
       response.setHeader(name, value);
     }
     return presented.body;
+  }
+}
+
+@Controller('usage')
+@UseGuards(ApiKeyAuthGuard, ScopesGuard)
+export class DailyUsageController {
+  constructor(private readonly dailyUsage: DailyUsageService) {}
+
+  @Get('daily')
+  @RequiredScopes('usage:read')
+  async list(
+    @CurrentApiKey() actor: AuthenticatedApiKey,
+    @Req() request: Request,
+  ): Promise<{ items: DailyUsageItem[] }> {
+    const query = parseListDailyUsageQuery(
+      request.query as Record<string, unknown>,
+    );
+    return presentDailyUsage(
+      await this.dailyUsage.list(actor, query.from, query.to),
+    );
   }
 }

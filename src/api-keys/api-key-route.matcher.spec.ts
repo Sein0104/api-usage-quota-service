@@ -64,4 +64,28 @@ describe('API key route policy', () => {
     expect(apiKeyRoutePolicy(request(method, url))).toBeNull();
     expect(isUnregisteredApiKeyRoute(request(method, url))).toBe(true);
   });
+
+  it.each([
+    ['GET', '/v1/usage/daily?from=2026-08-01&to=2026-08-02'],
+    ['GET', '/v1/usage/daily/'],
+    ['GET', '/v1/USAGE/DAILY?from=broken'],
+  ])('authenticates the exact daily usage operation %s %s', (method, url) => {
+    expect(apiKeyRoutePolicy(request(method, url))).toEqual({
+      requiredScopes: ['usage:read'],
+    });
+    expect(isUnregisteredApiKeyRoute(request(method, url))).toBe(false);
+  });
+
+  it.each([
+    ['GET', '/v1/usage'],
+    ['POST', '/v1/usage/daily'],
+    ['GET', '/v1/usage/daily/child'],
+    ['DELETE', '/v1/usage/other/child'],
+  ])(
+    'keeps unknown usage namespace routes parser-before 404: %s %s',
+    (method, url) => {
+      expect(apiKeyRoutePolicy(request(method, url))).toBeNull();
+      expect(isUnregisteredApiKeyRoute(request(method, url))).toBe(true);
+    },
+  );
 });

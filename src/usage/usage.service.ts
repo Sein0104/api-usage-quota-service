@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { Buffer } from 'node:buffer';
 import { isDatabaseDependencyError } from '../common/database/dependency-error.js';
 import { ProblemCode } from '../common/http/problem-code.js';
@@ -11,6 +11,13 @@ import { payloadHash } from './domain/payload-hash.js';
 import { quotaTime } from './domain/quota-time.js';
 import type { UsageTerminalResult } from './domain/usage-terminal-result.js';
 import { UsageRepository, type StoredUsageEvent } from './usage.repository.js';
+import {
+  IdempotencyConflictNotVisibleError,
+  IdempotencyRetry,
+} from './idempotency-retry.js';
+
+export const USAGE_QUOTA_TIME = Symbol('USAGE_QUOTA_TIME');
+export type UsageQuotaTime = typeof quotaTime;
 
 export interface CreateUsageEventCommand {
   units: number;
@@ -62,6 +69,9 @@ export class UsageService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly repository: UsageRepository,
+    private readonly idempotencyRetry: IdempotencyRetry = new IdempotencyRetry(),
+    @Inject(USAGE_QUOTA_TIME)
+    private readonly calculateQuotaTime: UsageQuotaTime = quotaTime,
   ) {}
 
   async ingest(
@@ -78,87 +88,89 @@ export class UsageService {
       throw validationError();
     }
     const hash = payloadHash(command.units);
-    const time = quotaTime(context.receivedAt);
+    const time = this.calculateQuotaTime(context.receivedAt);
 
     try {
-      return await this.prisma.$transaction(
-        async (tx) => {
-          const eventId = await this.repository.insertPending(tx, {
-            apiKeyId: actor.id,
-            idempotencyKey,
-            payloadHash: hash,
-            projectId: actor.projectId,
-            receivedAt: context.receivedAt,
-            units: BigInt(command.units),
-            usageDate: time.usageDate,
-          });
-
-          if (eventId === null) {
-            const existing = await this.repository.findByIdempotencyKey(
-              tx,
-              actor.projectId,
+      return await this.idempotencyRetry.execute(async () =>
+        this.prisma.$transaction(
+          async (tx) => {
+            const eventId = await this.repository.insertPending(tx, {
+              apiKeyId: actor.id,
               idempotencyKey,
-            );
-            if (existing === null) {
-              throw new Error('Conflicting usage event was not visible.');
-            }
-            if (!Buffer.from(existing.payloadHash).equals(hash)) {
-              throw new ProblemException({
-                code: ProblemCode.IDEMPOTENCY_KEY_REUSED,
-                detail:
-                  'The idempotency key was already used with another payload.',
-                status: 409,
-                title: 'Idempotency key reused',
-              });
-            }
-            return terminal(existing);
-          }
+              payloadHash: hash,
+              projectId: actor.projectId,
+              receivedAt: context.receivedAt,
+              units: BigInt(command.units),
+              usageDate: time.usageDate,
+            });
 
-          await this.repository.createDailyUsage(
-            tx,
-            actor.projectId,
-            time.usageDate,
-          );
-          const consumed = await this.repository.tryConsume(
-            tx,
-            actor.projectId,
-            time.usageDate,
-            BigInt(command.units),
-          );
-          const snapshot =
-            consumed ??
-            (await this.repository.lockDailyUsage(
+            if (eventId === null) {
+              const existing = await this.repository.findByIdempotencyKey(
+                tx,
+                actor.projectId,
+                idempotencyKey,
+              );
+              if (existing === null) {
+                throw new IdempotencyConflictNotVisibleError();
+              }
+              if (!Buffer.from(existing.payloadHash).equals(hash)) {
+                throw new ProblemException({
+                  code: ProblemCode.IDEMPOTENCY_KEY_REUSED,
+                  detail:
+                    'The idempotency key was already used with another payload.',
+                  status: 409,
+                  title: 'Idempotency key reused',
+                });
+              }
+              return terminal(existing);
+            }
+
+            await this.repository.createDailyUsage(
               tx,
               actor.projectId,
               time.usageDate,
-            ));
-          if (snapshot === null) {
-            throw new Error(
-              'Authenticated project quota row invariant violated.',
             );
-          }
-          const accepted = consumed !== null;
-          const finalized = await this.repository.finalize(
-            tx,
-            actor.projectId,
-            {
-              decision: accepted
-                ? UsageDecision.ACCEPTED
-                : UsageDecision.QUOTA_EXCEEDED,
-              eventId,
-              limit: snapshot.limit,
-              receivedAt: context.receivedAt,
-              remaining: snapshot.limit - snapshot.used,
-              resetAt: time.resetAt,
-              responseStatus: accepted ? 200 : 429,
-            },
-          );
-          if (finalized === null) {
-            throw new Error('Usage event finalization invariant violated.');
-          }
-          return terminal(finalized);
-        },
-        { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted },
+            const consumed = await this.repository.tryConsume(
+              tx,
+              actor.projectId,
+              time.usageDate,
+              BigInt(command.units),
+            );
+            const snapshot =
+              consumed ??
+              (await this.repository.lockDailyUsage(
+                tx,
+                actor.projectId,
+                time.usageDate,
+              ));
+            if (snapshot === null) {
+              throw new Error(
+                'Authenticated project quota row invariant violated.',
+              );
+            }
+            const accepted = consumed !== null;
+            const finalized = await this.repository.finalize(
+              tx,
+              actor.projectId,
+              {
+                decision: accepted
+                  ? UsageDecision.ACCEPTED
+                  : UsageDecision.QUOTA_EXCEEDED,
+                eventId,
+                limit: snapshot.limit,
+                receivedAt: context.receivedAt,
+                remaining: snapshot.limit - snapshot.used,
+                resetAt: time.resetAt,
+                responseStatus: accepted ? 200 : 429,
+              },
+            );
+            if (finalized === null) {
+              throw new Error('Usage event finalization invariant violated.');
+            }
+            return terminal(finalized);
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted },
+        ),
       );
     } catch (error) {
       if (
