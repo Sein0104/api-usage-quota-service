@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import type { Buffer } from 'node:buffer';
 import { Prisma, type UsageDecision } from '../generated/prisma/client.js';
+import type { PrismaService } from '../database/prisma.service.js';
+import type { DailyUsageRecord } from './daily-usage.presenter.js';
 
 export interface InsertPendingUsage {
   apiKeyId: string;
@@ -41,6 +43,30 @@ export interface FinalizeUsage {
 
 @Injectable()
 export class UsageRepository {
+  async listDaily(
+    database: PrismaService,
+    projectId: string,
+    from: string,
+    to: string,
+  ): Promise<DailyUsageRecord[]> {
+    return database.dailyUsage.findMany({
+      orderBy: { usageDate: 'asc' },
+      select: {
+        limitUnits: true,
+        updatedAt: true,
+        usageDate: true,
+        usedUnits: true,
+      },
+      where: {
+        projectId,
+        usageDate: {
+          gte: new Date(`${from}T00:00:00.000Z`),
+          lte: new Date(`${to}T00:00:00.000Z`),
+        },
+      },
+    });
+  }
+
   async insertPending(
     tx: Prisma.TransactionClient,
     input: InsertPendingUsage,
