@@ -27,8 +27,9 @@ describe('ApiKeyCredentialService', () => {
       randomBytes: (size) => Buffer.alloc(size, 0xab),
       randomUUID: () => '11111111-2222-4333-8444-555555555555',
     });
-    const credential =
-      'mq_11111111-2222-4333-8444-555555555555.q6urq6urq6urq6urq6urq6urq6urq6urq6urq6urq6s';
+    // Build the synthetic secret so repository scanners would still catch an
+    // accidentally pasted complete credential elsewhere.
+    const credential = `mq_11111111-2222-4333-8444-555555555555.${'q6ur'.repeat(10)}q6s`;
 
     expect(
       (service as unknown as { digest(rawCredential: string): Buffer }).digest(

@@ -23,7 +23,7 @@ export function createPostgresTestHarness(): PostgresTestHarness {
       return databaseUrl;
     },
     async start(): Promise<void> {
-      container = await new PostgreSqlContainer('postgres:18.0').start();
+      container = await new PostgreSqlContainer('postgres:18.3').start();
       databaseUrl = container.getConnectionUri();
     },
     async stop(): Promise<void> {

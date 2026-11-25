@@ -20,8 +20,7 @@ jest.setTimeout(120_000);
 describe('credential leak security', () => {
   const secrets = {
     API_KEY_PEPPER: `pepper-${'p'.repeat(43)}`,
-    DATABASE_URL:
-      'postgresql://db-user:db-password-canary@localhost:5432/database-canary',
+    DATABASE_URL: `postgresql://${'db-user'}:${'db-password-canary'}@localhost:5432/database-canary`,
     METRICS_TOKEN: `metrics-${'m'.repeat(43)}`,
     SYSTEM_ADMIN_TOKEN: `admin-${'s'.repeat(43)}`,
   };

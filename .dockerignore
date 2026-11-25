@@ -1,0 +1,15 @@
+.git
+.github
+.npm-cache
+.npmrc
+.tools
+.worktrees
+coverage
+dist
+docs
+node_modules
+test
+*.log
+.env
+.env.*
+!.env.example
