@@ -1,0 +1,122 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+  runtime      = "nodejs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ApiKeyStatus {
+  ACTIVE
+  REVOKED
+
+  @@map("api_key_status")
+}
+
+enum UsageDecision {
+  PENDING
+  ACCEPTED
+  QUOTA_EXCEEDED
+
+  @@map("usage_decision")
+}
+
+enum AuditAction {
+  PROJECT_CREATED
+  API_KEY_CREATED
+  API_KEY_REVOKED
+
+  @@map("audit_action")
+}
+
+model Project {
+  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name            String       @db.VarChar(100)
+  dailyQuotaUnits BigInt       @map("daily_quota_units")
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  apiKeys         ApiKey[]
+  usageEvents     UsageEvent[]
+  dailyUsage      DailyUsage[]
+  auditLogs       AuditLog[]
+
+  @@map("projects")
+}
+
+model ApiKey {
+  id            String       @id @db.Uuid
+  projectId     String       @map("project_id") @db.Uuid
+  name          String       @db.VarChar(100)
+  prefix        String       @unique @db.VarChar(39)
+  secretDigest  Bytes        @map("secret_digest")
+  scopes        String[]
+  status        ApiKeyStatus @default(ACTIVE)
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  revokedAt     DateTime?    @map("revoked_at") @db.Timestamptz(3)
+  project       Project      @relation(fields: [projectId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  usageEvents   UsageEvent[]
+  actorLogs     AuditLog[]   @relation("audit_actor_key")
+  resourceLogs  AuditLog[]   @relation("audit_resource_key")
+
+  @@unique([projectId, id])
+  @@index([projectId, createdAt(sort: Desc), id(sort: Desc)], map: "api_keys_project_cursor_idx")
+  // Partial indexes and CHECK constraints require the reviewed custom SQL migration.
+  @@map("api_keys")
+}
+
+model UsageEvent {
+  id                  String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId           String        @map("project_id") @db.Uuid
+  apiKeyId            String        @map("api_key_id") @db.Uuid
+  idempotencyKey      String        @map("idempotency_key") @db.Uuid
+  payloadHash         Bytes         @map("payload_hash")
+  usageDate           DateTime      @map("usage_date") @db.Date
+  units               BigInt
+  decision            UsageDecision @default(PENDING)
+  responseStatus      Int?          @map("response_status") @db.SmallInt
+  quotaLimitUnits     BigInt?       @map("quota_limit_units")
+  quotaRemainingUnits BigInt?       @map("quota_remaining_units")
+  quotaResetAt        DateTime?     @map("quota_reset_at") @db.Timestamptz(3)
+  receivedAt          DateTime      @map("received_at") @db.Timestamptz(3)
+  finalizedAt         DateTime?     @map("finalized_at") @db.Timestamptz(3)
+  project             Project       @relation(fields: [projectId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  apiKey              ApiKey        @relation(fields: [projectId, apiKeyId], references: [projectId, id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([projectId, idempotencyKey])
+  @@index([projectId, apiKeyId], map: "usage_events_project_api_key_idx")
+  // UUID version and temporal/finalization CHECK constraints require custom SQL.
+  @@map("usage_events")
+}
+
+model DailyUsage {
+  projectId  String   @map("project_id") @db.Uuid
+  usageDate  DateTime @map("usage_date") @db.Date
+  usedUnits  BigInt   @default(0) @map("used_units")
+  limitUnits BigInt   @map("limit_units")
+  updatedAt  DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@id([projectId, usageDate])
+  // BigInt range CHECK constraints require custom SQL.
+  @@map("daily_usage")
+}
+
+model AuditLog {
+  id               String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId        String      @map("project_id") @db.Uuid
+  actorKeyId       String?     @map("actor_key_id") @db.Uuid
+  action           AuditAction
+  resourceApiKeyId String?     @map("resource_api_key_id") @db.Uuid
+  requestId        String      @map("request_id") @db.Uuid
+  metadata         Json        @default("{}")
+  createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  project          Project     @relation(fields: [projectId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  actorKey         ApiKey?     @relation("audit_actor_key", fields: [projectId, actorKeyId], references: [projectId, id], onDelete: Restrict, onUpdate: Cascade)
+  resourceApiKey   ApiKey?     @relation("audit_resource_key", fields: [projectId, resourceApiKeyId], references: [projectId, id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([projectId, createdAt(sort: Desc), id(sort: Desc)], map: "audit_logs_project_cursor_idx")
+  // Partial foreign-key indexes and action/JSON CHECK constraints require custom SQL.
+  @@map("audit_logs")
+}

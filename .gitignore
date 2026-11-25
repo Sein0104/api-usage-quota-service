@@ -1,0 +1,12 @@
+.worktrees/
+.tools/
+node_modules/
+.npm-cache/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+*.log
+*.tsbuildinfo
+src/generated/prisma/

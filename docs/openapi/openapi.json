@@ -1,0 +1,3058 @@
+{
+  "components": {
+    "schemas": {
+      "AcceptedUsageResponseModel": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "enum": [
+              "ACCEPTED"
+            ],
+            "type": "string"
+          },
+          "eventId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "quota": {
+            "$ref": "#/components/schemas/QuotaSnapshotModel"
+          },
+          "units": {
+            "maximum": 10000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "usageDate": {
+            "format": "date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "eventId",
+          "decision",
+          "usageDate",
+          "units",
+          "quota"
+        ],
+        "type": "object"
+      },
+      "ActiveApiKeyMetadataModel": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "prefix": {
+            "pattern": "^mq_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+            "type": "string"
+          },
+          "revokedAt": {
+            "enum": [
+              null
+            ],
+            "nullable": true,
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "enum": [
+                "usage:write",
+                "usage:read",
+                "keys:manage",
+                "audit:read"
+              ],
+              "type": "string"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "status": {
+            "enum": [
+              "ACTIVE"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "prefix",
+          "scopes",
+          "status",
+          "createdAt",
+          "revokedAt"
+        ],
+        "type": "object"
+      },
+      "ActiveKeyLimitReachedProblem": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "enum": [
+              "ACTIVE_KEY_LIMIT_REACHED"
+            ],
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "requestId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              409
+            ],
+            "type": "integer"
+          },
+          "title": {
+            "enum": [
+              "Active API key limit reached"
+            ],
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "urn:api-usage-quota-service:problem:active-key-limit-reached"
+            ],
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "code",
+          "requestId"
+        ],
+        "type": "object"
+      },
+      "ApiKeyCreatedAuditLog": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "API_KEY_CREATED"
+            ],
+            "type": "string"
+          },
+          "actorKeyId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/ApiKeyCreatedMetadataModel"
+          },
+          "requestId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "resourceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "resourceType": {
+            "enum": [
+              "API_KEY"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "action",
+          "resourceType",
+          "resourceId",
+          "actorKeyId",
+          "requestId",
+          "metadata",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "ApiKeyCreatedMetadataModel": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "prefix": {
+            "pattern": "^mq_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "enum": [
+                "usage:write",
+                "usage:read",
+                "keys:manage",
+                "audit:read"
+              ],
+              "type": "string"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "name",
+          "prefix",
+          "scopes"
+        ],
+        "type": "object"
+      },
+      "ApiKeyCreateResponseModel": {
+        "additionalProperties": false,
+        "properties": {
+          "apiKey": {
+            "$ref": "#/components/schemas/ActiveApiKeyMetadataModel"
+          },
+          "secret": {
+            "format": "password",
+            "pattern": "^mq_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.[A-Za-z0-9_-]{43}$",
+            "readOnly": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "apiKey",
+          "secret"
+        ],
+        "type": "object"
+      },
+      "ApiKeyMetadataModel": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "prefix": {
+            "pattern": "^mq_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+            "type": "string"
+          },
+          "revokedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "enum": [
+                "usage:write",
+                "usage:read",
+                "keys:manage",
+                "audit:read"
+              ],
+              "type": "string"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "status": {
+            "enum": [
+              "ACTIVE",
+              "REVOKED"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "prefix",
+          "scopes",
+          "status",
+          "createdAt",
+          "revokedAt"
+        ],
+        "type": "object"
+      },
+      "ApiKeyPageModel": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ApiKeyMetadataModel"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "type": "object"
+      },
+      "ApiKeyRevokedAuditLog": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "API_KEY_REVOKED"
+            ],
+            "type": "string"
+          },
+          "actorKeyId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/ApiKeyRevokedMetadataModel"
+          },
+          "requestId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "resourceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "resourceType": {
+            "enum": [
+              "API_KEY"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "action",
+          "resourceType",
+          "resourceId",
+          "actorKeyId",
+          "requestId",
+          "metadata",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "ApiKeyRevokedMetadataModel": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "prefix": {
+            "pattern": "^mq_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "prefix"
+        ],
+        "type": "object"
+      },
+      "AuditLogModel": {
+        "discriminator": {
+          "mapping": {
+            "API_KEY_CREATED": "#/components/schemas/ApiKeyCreatedAuditLog",
+            "API_KEY_REVOKED": "#/components/schemas/ApiKeyRevokedAuditLog",
+            "PROJECT_CREATED": "#/components/schemas/ProjectCreatedAuditLog"
+          },
+          "propertyName": "action"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ProjectCreatedAuditLog"
+          },
+          {
+            "$ref": "#/components/schemas/ApiKeyCreatedAuditLog"
+          },
+          {
+            "$ref": "#/components/schemas/ApiKeyRevokedAuditLog"
+          }
+        ]
+      },
+      "AuditLogPageModel": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AuditLogModel"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "type": "object"
+      },
+      "CannotRevokeCurrentKeyProblem": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "enum": [
+              "CANNOT_REVOKE_CURRENT_KEY"
+            ],
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "requestId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              409
+            ],
+            "type": "integer"
+          },
+          "title": {
+            "enum": [
+              "Cannot revoke current API key"
+            ],
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "urn:api-usage-quota-service:problem:cannot-revoke-current-key"
+            ],
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "code",
+          "requestId"
+        ],
+        "type": "object"
+      },
+      "ConcurrentRequestRetryExhaustedProblem": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "enum": [
+              "CONCURRENT_REQUEST_RETRY_EXHAUSTED"
+            ],
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "requestId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              503
+            ],
+            "type": "integer"
+          },
+          "title": {
+            "enum": [
+              "Concurrent request retry exhausted"
+            ],
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "urn:api-usage-quota-service:problem:concurrent-request-retry-exhausted"
+            ],
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "code",
+          "requestId"
+        ],
+        "type": "object"
+      },
+      "CreateApiKeyDto": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "pattern": "^\\S(?:[\\s\\S]*\\S)?$",
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "enum": [
+                "usage:write",
+                "usage:read",
+                "keys:manage",
+                "audit:read"
+              ],
+              "type": "string"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "name",
+          "scopes"
+        ],
+        "type": "object"
+      },
+      "CreateProjectDto": {
+        "additionalProperties": false,
+        "properties": {
+          "dailyQuotaUnits": {
+            "maximum": 1000000000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "pattern": "^\\S(?:[\\s\\S]*\\S)?$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "dailyQuotaUnits"
+        ],
+        "type": "object"
+      },
+      "CreateUsageEventDto": {
+        "additionalProperties": false,
+        "properties": {
+          "units": {
+            "maximum": 10000,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "units"
+        ],
+        "type": "object"
+      },
+      "DailyUsageItemModel": {
+        "additionalProperties": false,
+        "properties": {
+          "limitUnits": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "remainingUnits": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "usageDate": {
+            "format": "date",
+            "type": "string"
+          },
+          "usedUnits": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "usageDate",
+          "usedUnits",
+          "limitUnits",
+          "remainingUnits",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "DailyUsageResponseModel": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DailyUsageItemModel"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "DependencyUnavailableProblem": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "enum": [
+              "DEPENDENCY_UNAVAILABLE"
+            ],
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "requestId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              503
+            ],
+            "type": "integer"
+          },
+          "title": {
+            "enum": [
+              "Dependency unavailable"
+            ],
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "urn:api-usage-quota-service:problem:dependency-unavailable"
+            ],
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "code",
+          "requestId"
+        ],
+        "type": "object"
+      },
+      "IdempotencyKeyReusedProblem": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "enum": [
+              "IDEMPOTENCY_KEY_REUSED"
+            ],
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "requestId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              409
+            ],
+            "type": "integer"
+          },
+          "title": {
+            "enum": [
+              "Idempotency key reused"
+            ],
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "urn:api-usage-quota-service:problem:idempotency-key-reused"
+            ],
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "code",
+          "requestId"
+        ],
+        "type": "object"
+      },
+      "InsufficientScopeProblem": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "enum": [
+              "INSUFFICIENT_SCOPE"
+            ],
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "requestId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              403
+            ],
+            "type": "integer"
+          },
+          "title": {
+            "enum": [
+              "Insufficient scope"
+            ],
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "urn:api-usage-quota-service:problem:insufficient-scope"
+            ],
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "code",
+          "requestId"
+        ],
+        "type": "object"
+      },
+      "InternalErrorProblem": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "enum": [
+              "INTERNAL_ERROR"
+            ],
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "requestId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              500
+            ],
+            "type": "integer"
+          },
+          "title": {
+            "enum": [
+              "Internal server error"
+            ],
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "urn:api-usage-quota-service:problem:internal-error"
+            ],
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "code",
+          "requestId"
+        ],
+        "type": "object"
+      },
+      "InvalidApiKeyProblem": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "enum": [
+              "INVALID_API_KEY"
+            ],
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "requestId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              401
+            ],
+            "type": "integer"
+          },
+          "title": {
+            "enum": [
+              "Invalid API key"
+            ],
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "urn:api-usage-quota-service:problem:invalid-api-key"
+            ],
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "code",
+          "requestId"
+        ],
+        "type": "object"
+      },
+      "InvalidCursorProblem": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "enum": [
+              "INVALID_CURSOR"
+            ],
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationErrorItem"
+            },
+            "type": "array"
+          },
+          "requestId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              400
+            ],
+            "type": "integer"
+          },
+          "title": {
+            "enum": [
+              "Invalid cursor"
+            ],
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "urn:api-usage-quota-service:problem:invalid-cursor"
+            ],
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "code",
+          "requestId"
+        ],
+        "type": "object"
+      },
+      "InvalidMetricsTokenProblem": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "enum": [
+              "INVALID_METRICS_TOKEN"
+            ],
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "requestId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              401
+            ],
+            "type": "integer"
+          },
+          "title": {
+            "enum": [
+              "Invalid metrics token"
+            ],
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "urn:api-usage-quota-service:problem:invalid-metrics-token"
+            ],
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "code",
+          "requestId"
+        ],
+        "type": "object"
+      },
+      "InvalidSystemAdminTokenProblem": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "enum": [
+              "INVALID_SYSTEM_ADMIN_TOKEN"
+            ],
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "requestId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              401
+            ],
+            "type": "integer"
+          },
+          "title": {
+            "enum": [
+              "Invalid system administrator token"
+            ],
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "urn:api-usage-quota-service:problem:invalid-system-admin-token"
+            ],
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "code",
+          "requestId"
+        ],
+        "type": "object"
+      },
+      "LiveHealth": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "enum": [
+              "ok"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "NotReadyHealth": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "enum": [
+              "not_ready"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "ProblemModel": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "errors": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "requestId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "type": {
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "code",
+          "requestId"
+        ],
+        "type": "object"
+      },
+      "ProjectBootstrapResponseModel": {
+        "additionalProperties": false,
+        "properties": {
+          "apiKey": {
+            "$ref": "#/components/schemas/ActiveApiKeyMetadataModel"
+          },
+          "project": {
+            "$ref": "#/components/schemas/ProjectModel"
+          },
+          "secret": {
+            "format": "password",
+            "pattern": "^mq_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.[A-Za-z0-9_-]{43}$",
+            "readOnly": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "project",
+          "apiKey",
+          "secret"
+        ],
+        "type": "object"
+      },
+      "ProjectCreatedAuditLog": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "PROJECT_CREATED"
+            ],
+            "type": "string"
+          },
+          "actorKeyId": {
+            "enum": [
+              null
+            ],
+            "nullable": true,
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/ProjectCreatedMetadataModel"
+          },
+          "requestId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "resourceId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "resourceType": {
+            "enum": [
+              "PROJECT"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "action",
+          "resourceType",
+          "resourceId",
+          "actorKeyId",
+          "requestId",
+          "metadata",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "ProjectCreatedMetadataModel": {
+        "additionalProperties": false,
+        "properties": {
+          "dailyQuotaUnits": {
+            "maximum": 1000000000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "initialApiKeyId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "projectName": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "projectName",
+          "dailyQuotaUnits",
+          "initialApiKeyId"
+        ],
+        "type": "object"
+      },
+      "ProjectModel": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "dailyQuotaUnits": {
+            "maximum": 1000000000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "dailyQuotaUnits",
+          "createdAt"
+        ],
+        "type": "object"
+      },
+      "QuotaExceededProblem": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "enum": [
+              "QUOTA_EXCEEDED"
+            ],
+            "type": "string"
+          },
+          "decision": {
+            "enum": [
+              "QUOTA_EXCEEDED"
+            ],
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "eventId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "quota": {
+            "$ref": "#/components/schemas/QuotaSnapshotModel"
+          },
+          "requestId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              429
+            ],
+            "type": "integer"
+          },
+          "title": {
+            "enum": [
+              "Daily quota exceeded"
+            ],
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "urn:api-usage-quota-service:problem:quota-exceeded"
+            ],
+            "format": "uri",
+            "type": "string"
+          },
+          "units": {
+            "maximum": 10000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "usageDate": {
+            "format": "date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "code",
+          "requestId",
+          "eventId",
+          "decision",
+          "usageDate",
+          "units",
+          "quota"
+        ],
+        "type": "object"
+      },
+      "QuotaSnapshotModel": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "maximum": 1000000000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "remaining": {
+            "maximum": 1000000000,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "resetAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "limit",
+          "remaining",
+          "resetAt"
+        ],
+        "type": "object"
+      },
+      "ReadyHealth": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "enum": [
+              "ready"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "ResourceNotFoundProblem": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "enum": [
+              "RESOURCE_NOT_FOUND"
+            ],
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "requestId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              404
+            ],
+            "type": "integer"
+          },
+          "title": {
+            "enum": [
+              "Resource not found"
+            ],
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "urn:api-usage-quota-service:problem:resource-not-found"
+            ],
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "code",
+          "requestId"
+        ],
+        "type": "object"
+      },
+      "UnsupportedMediaTypeProblem": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "enum": [
+              "UNSUPPORTED_MEDIA_TYPE"
+            ],
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "requestId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              415
+            ],
+            "type": "integer"
+          },
+          "title": {
+            "enum": [
+              "Unsupported media type"
+            ],
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "urn:api-usage-quota-service:problem:unsupported-media-type"
+            ],
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "code",
+          "requestId"
+        ],
+        "type": "object"
+      },
+      "ValidationErrorItem": {
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "ValidationErrorProblem": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "enum": [
+              "VALIDATION_ERROR"
+            ],
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationErrorItem"
+            },
+            "type": "array"
+          },
+          "requestId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              400
+            ],
+            "type": "integer"
+          },
+          "title": {
+            "enum": [
+              "Validation failed"
+            ],
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "urn:api-usage-quota-service:problem:validation-error"
+            ],
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "code",
+          "requestId"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "metricsBearer": {
+        "bearerFormat": "opaque",
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "projectApiKeyBearer": {
+        "bearerFormat": "opaque",
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "systemAdminBearer": {
+        "bearerFormat": "opaque",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "contact": {},
+    "description": "Tenant-isolated API usage metering and daily quota service.",
+    "title": "API Usage Metering and Quota Service",
+    "version": "0.1.0"
+  },
+  "openapi": "3.0.0",
+  "paths": {
+    "/health/live": {
+      "get": {
+        "operationId": "HealthController.live",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveHealth"
+                }
+              }
+            },
+            "description": "",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "operationId": "HealthController.ready",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadyHealth"
+                }
+              }
+            },
+            "description": "",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalErrorProblem"
+                }
+              }
+            },
+            "description": "Problem Details (500).",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotReadyHealth"
+                }
+              }
+            },
+            "description": "PostgreSQL or migrations are not ready.",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/metrics": {
+      "get": {
+        "operationId": "MetricsController.exposition",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidMetricsTokenProblem"
+                }
+              }
+            },
+            "description": "Problem Details (401).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer authentication challenge.",
+                "required": true,
+                "schema": {
+                  "enum": [
+                    "Bearer"
+                  ],
+                  "type": "string"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalErrorProblem"
+                }
+              }
+            },
+            "description": "Problem Details (500).",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "metricsBearer": []
+          }
+        ],
+        "tags": [
+          "metrics"
+        ]
+      }
+    },
+    "/v1/admin/projects": {
+      "post": {
+        "operationId": "SystemAdminController.createProject",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProjectDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectBootstrapResponseModel"
+                }
+              }
+            },
+            "description": "",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorProblem"
+                }
+              }
+            },
+            "description": "Problem Details (400).",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidSystemAdminTokenProblem"
+                }
+              }
+            },
+            "description": "Problem Details (401).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer authentication challenge.",
+                "required": true,
+                "schema": {
+                  "enum": [
+                    "Bearer"
+                  ],
+                  "type": "string"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "415": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnsupportedMediaTypeProblem"
+                }
+              }
+            },
+            "description": "Problem Details (415).",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalErrorProblem"
+                }
+              }
+            },
+            "description": "Unexpected internal server error.",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyUnavailableProblem"
+                }
+              }
+            },
+            "description": "Required dependency unavailable.",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "systemAdminBearer": []
+          }
+        ],
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/api-keys": {
+      "get": {
+        "operationId": "ApiKeysController.list",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Opaque unpadded base64url pagination cursor.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyPageModel"
+                }
+              }
+            },
+            "description": "",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/InvalidCursorProblem"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorProblem"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Problem Details (400).",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidApiKeyProblem"
+                }
+              }
+            },
+            "description": "Problem Details (401).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer authentication challenge.",
+                "required": true,
+                "schema": {
+                  "enum": [
+                    "Bearer"
+                  ],
+                  "type": "string"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsufficientScopeProblem"
+                }
+              }
+            },
+            "description": "Problem Details (403).",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalErrorProblem"
+                }
+              }
+            },
+            "description": "Unexpected internal server error.",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyUnavailableProblem"
+                }
+              }
+            },
+            "description": "Required dependency unavailable.",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "projectApiKeyBearer": []
+          }
+        ],
+        "tags": [
+          "api-keys"
+        ]
+      },
+      "post": {
+        "operationId": "ApiKeysController.create",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateApiKeyDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiKeyCreateResponseModel"
+                }
+              }
+            },
+            "description": "",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorProblem"
+                }
+              }
+            },
+            "description": "Problem Details (400).",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidApiKeyProblem"
+                }
+              }
+            },
+            "description": "Problem Details (401).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer authentication challenge.",
+                "required": true,
+                "schema": {
+                  "enum": [
+                    "Bearer"
+                  ],
+                  "type": "string"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsufficientScopeProblem"
+                }
+              }
+            },
+            "description": "Problem Details (403).",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActiveKeyLimitReachedProblem"
+                }
+              }
+            },
+            "description": "Problem Details (409).",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "415": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnsupportedMediaTypeProblem"
+                }
+              }
+            },
+            "description": "Problem Details (415).",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalErrorProblem"
+                }
+              }
+            },
+            "description": "Unexpected internal server error.",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyUnavailableProblem"
+                }
+              }
+            },
+            "description": "Required dependency unavailable.",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "projectApiKeyBearer": []
+          }
+        ],
+        "tags": [
+          "api-keys"
+        ]
+      }
+    },
+    "/v1/api-keys/{id}": {
+      "delete": {
+        "operationId": "ApiKeysController.revoke",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorProblem"
+                }
+              }
+            },
+            "description": "Problem Details (400).",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidApiKeyProblem"
+                }
+              }
+            },
+            "description": "Problem Details (401).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer authentication challenge.",
+                "required": true,
+                "schema": {
+                  "enum": [
+                    "Bearer"
+                  ],
+                  "type": "string"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsufficientScopeProblem"
+                }
+              }
+            },
+            "description": "Problem Details (403).",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceNotFoundProblem"
+                }
+              }
+            },
+            "description": "Problem Details (404).",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CannotRevokeCurrentKeyProblem"
+                }
+              }
+            },
+            "description": "Problem Details (409).",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalErrorProblem"
+                }
+              }
+            },
+            "description": "Unexpected internal server error.",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyUnavailableProblem"
+                }
+              }
+            },
+            "description": "Required dependency unavailable.",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "projectApiKeyBearer": []
+          }
+        ],
+        "tags": [
+          "api-keys"
+        ]
+      }
+    },
+    "/v1/audit-logs": {
+      "get": {
+        "operationId": "AuditController.list",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Opaque unpadded base64url pagination cursor.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditLogPageModel"
+                }
+              }
+            },
+            "description": "",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/InvalidCursorProblem"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorProblem"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Problem Details (400).",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidApiKeyProblem"
+                }
+              }
+            },
+            "description": "Problem Details (401).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer authentication challenge.",
+                "required": true,
+                "schema": {
+                  "enum": [
+                    "Bearer"
+                  ],
+                  "type": "string"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsufficientScopeProblem"
+                }
+              }
+            },
+            "description": "Problem Details (403).",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalErrorProblem"
+                }
+              }
+            },
+            "description": "Unexpected internal server error.",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyUnavailableProblem"
+                }
+              }
+            },
+            "description": "Required dependency unavailable.",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "projectApiKeyBearer": []
+          }
+        ],
+        "tags": [
+          "audit"
+        ]
+      }
+    },
+    "/v1/usage-events": {
+      "post": {
+        "operationId": "UsageController.ingest",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUsageEventDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptedUsageResponseModel"
+                }
+              }
+            },
+            "description": "",
+            "headers": {
+              "X-Quota-Limit": {
+                "description": "Daily quota limit.",
+                "required": true,
+                "schema": {
+                  "maximum": 1000000000,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "X-Quota-Remaining": {
+                "description": "Remaining daily quota.",
+                "required": true,
+                "schema": {
+                  "maximum": 1000000000,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "X-Quota-Reset": {
+                "description": "UTC quota reset time as Unix epoch seconds.",
+                "required": true,
+                "schema": {
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorProblem"
+                }
+              }
+            },
+            "description": "Problem Details (400).",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidApiKeyProblem"
+                }
+              }
+            },
+            "description": "Problem Details (401).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer authentication challenge.",
+                "required": true,
+                "schema": {
+                  "enum": [
+                    "Bearer"
+                  ],
+                  "type": "string"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsufficientScopeProblem"
+                }
+              }
+            },
+            "description": "Problem Details (403).",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdempotencyKeyReusedProblem"
+                }
+              }
+            },
+            "description": "Problem Details (409).",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "415": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnsupportedMediaTypeProblem"
+                }
+              }
+            },
+            "description": "Problem Details (415).",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuotaExceededProblem"
+                }
+              }
+            },
+            "description": "Problem Details (429).",
+            "headers": {
+              "X-Quota-Limit": {
+                "description": "Daily quota limit.",
+                "required": true,
+                "schema": {
+                  "maximum": 1000000000,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "X-Quota-Remaining": {
+                "description": "Remaining daily quota.",
+                "required": true,
+                "schema": {
+                  "maximum": 1000000000,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "X-Quota-Reset": {
+                "description": "UTC quota reset time as Unix epoch seconds.",
+                "required": true,
+                "schema": {
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalErrorProblem"
+                }
+              }
+            },
+            "description": "Unexpected internal server error.",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/DependencyUnavailableProblem"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ConcurrentRequestRetryExhaustedProblem"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Dependency unavailable or concurrency retry exhausted.",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "projectApiKeyBearer": []
+          }
+        ],
+        "tags": [
+          "usage"
+        ]
+      }
+    },
+    "/v1/usage/daily": {
+      "get": {
+        "operationId": "DailyUsageController.list",
+        "parameters": [
+          {
+            "description": "Inclusive range end as one canonical UTC YYYY-MM-DD date. It must be on or after from; duplicate and unknown query fields are rejected; the inclusive range may span at most 90 days.",
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Inclusive range start as one canonical UTC YYYY-MM-DD date. Duplicate and unknown query fields are rejected; the inclusive range may span at most 90 days.",
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyUsageResponseModel"
+                }
+              }
+            },
+            "description": "",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorProblem"
+                }
+              }
+            },
+            "description": "Problem Details (400).",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidApiKeyProblem"
+                }
+              }
+            },
+            "description": "Problem Details (401).",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Bearer authentication challenge.",
+                "required": true,
+                "schema": {
+                  "enum": [
+                    "Bearer"
+                  ],
+                  "type": "string"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsufficientScopeProblem"
+                }
+              }
+            },
+            "description": "Problem Details (403).",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InternalErrorProblem"
+                }
+              }
+            },
+            "description": "Unexpected internal server error.",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyUnavailableProblem"
+                }
+              }
+            },
+            "description": "Required dependency unavailable.",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier.",
+                "required": true,
+                "schema": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "projectApiKeyBearer": []
+          }
+        ],
+        "tags": [
+          "usage"
+        ]
+      }
+    }
+  },
+  "servers": [],
+  "tags": []
+}

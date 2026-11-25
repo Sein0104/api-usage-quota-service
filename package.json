@@ -1,0 +1,80 @@
+{
+  "name": "api-usage-quota-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@11.13.0",
+  "engines": {
+    "node": "24.16.x"
+  },
+  "scripts": {
+    "build": "nest build",
+    "format": "prettier --write \"{src,test}/**/*.ts\" \"scripts/**/*.mjs\" \"test/**/*.mjs\"",
+    "format:check": "prettier --check \"{src,test}/**/*.ts\" \"scripts/**/*.mjs\" \"test/**/*.mjs\"",
+    "lint": "eslint \"{src,test}/**/*.ts\" \"scripts/**/*.mjs\" \"test/**/*.mjs\"",
+    "start": "node dist/main.js",
+    "start:dev": "nest start --watch",
+    "prisma:generate": "prisma generate",
+    "openapi:generate": "npm run build && node dist/scripts/generate-openapi.js",
+    "openapi:check": "npm run build && node dist/scripts/generate-openapi.js --check",
+    "test:smoke": "node --env-file-if-exists=.env --test test/smoke/docker-compose.smoke-spec.mjs",
+    "test:scripts": "node --test test/scripts/*.spec.mjs",
+    "demo": "node --env-file-if-exists=.env scripts/demo.mjs",
+    "benchmark": "node --env-file-if-exists=.env scripts/benchmark-usage.mjs",
+    "explain:audit": "node scripts/explain-audit.mjs",
+    "docs:check": "node scripts/verify-docs.mjs",
+    "audit:runtime": "npm audit --omit=dev --omit=optional --omit=peer --audit-level=moderate",
+    "audit:all": "npm audit --audit-level=high",
+    "test:integration": "node --no-warnings --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.mjs --runInBand --testPathPatterns=test/integration",
+    "test:concurrency": "node --no-warnings --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.mjs --runInBand --testPathPatterns=test/concurrency",
+    "test:unit": "node --no-warnings --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.mjs --runInBand --testPathIgnorePatterns=test/e2e --testPathIgnorePatterns=test/integration --testPathIgnorePatterns=test/concurrency --testPathIgnorePatterns=test/contract --testPathIgnorePatterns=test/security",
+    "test:e2e": "node --no-warnings --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.mjs --runInBand --testPathPatterns=test/e2e",
+    "test:contract": "node --no-warnings --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.mjs --runInBand --testPathPatterns=test/contract",
+    "test:security": "node --no-warnings --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.mjs --runInBand --testPathPatterns=test/security",
+    "typecheck": "tsc --noEmit"
+  },
+  "overrides": {
+    "@prisma/config": {
+      "effect": "3.22.5"
+    }
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.1.6",
+    "@nestjs/core": "^11.1.6",
+    "@nestjs/platform-express": "^11.1.6",
+    "@nestjs/swagger": "11.4.8",
+    "@nestjs/terminus": "11.1.1",
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.2",
+    "joi": "^18.0.0",
+    "nestjs-pino": "4.6.1",
+    "pg": "8.23.0",
+    "pino": "10.3.1",
+    "pino-http": "11.0.0",
+    "prom-client": "15.1.3",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.10",
+    "@nestjs/testing": "^11.1.6",
+    "@testcontainers/postgresql": "12.1.0",
+    "@types/express": "^5.0.3",
+    "@types/jest": "^30.0.0",
+    "@types/pg": "8.21.0",
+    "@types/supertest": "^6.0.3",
+    "@typescript-eslint/eslint-plugin": "^8.39.1",
+    "@typescript-eslint/parser": "^8.39.1",
+    "eslint": "^9.34.0",
+    "eslint-config-prettier": "^10.1.8",
+    "jest": "^30.0.5",
+    "prettier": "^3.6.2",
+    "prisma": "7.10.1",
+    "supertest": "^7.1.4",
+    "ts-jest": "^29.4.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  }
+}
