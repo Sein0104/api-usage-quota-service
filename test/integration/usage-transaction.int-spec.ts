@@ -93,6 +93,46 @@ describe('usage ingest transaction', () => {
     );
   }
 
+  it('waits for a busy pool beyond two seconds without losing the usage transaction', async () => {
+    const actor = await createActor(10);
+    const busyPool = new Pool({
+      connectionString: harness.databaseUrl,
+      connectionTimeoutMillis: 3_000,
+      max: 1,
+    });
+    const database = new PrismaService(busyPool);
+    const blocker = await busyPool.connect();
+    const released = blocker
+      .query('SELECT pg_sleep(2.2)')
+      .finally(() => blocker.release());
+    const busyService = new UsageService(
+      database,
+      new UsageRepository(),
+      new IdempotencyRetry(),
+      quotaTime,
+      new MetricsService(),
+    );
+    try {
+      const [result] = await Promise.allSettled([
+        ingest(busyService, actor, randomUUID(), 1),
+        released,
+      ]);
+      expect(result).toMatchObject({
+        status: 'fulfilled',
+        value: { decision: 'ACCEPTED' },
+      });
+      await expect(
+        busyPool.query(
+          'SELECT used_units FROM daily_usage WHERE project_id = $1',
+          [actor.projectId],
+        ),
+      ).resolves.toMatchObject({ rows: [{ used_units: '1' }] });
+    } finally {
+      await released;
+      await database.onApplicationShutdown();
+    }
+  });
+
   it('commits accepted and quota-exceeded terminal rows without increasing quota on rejection', async () => {
     const actor = await createActor(3);
     const usage = service();

@@ -84,7 +84,7 @@
 - 구조화 로그는 `nestjs-pino`·`pino`와 credential redaction, metric은 `prom-client`, health는 `@nestjs/terminus`를 사용한다.
 - PostgreSQL Testcontainers package는 `@testcontainers/postgresql`을 사용한다.
 - Prisma 7은 `prisma-client` generator의 `output=../src/generated/prisma`, `moduleFormat=esm`, `runtime=nodejs`를 사용한다. `prisma.config.ts`가 datasource URL을 읽고 build·test 전에 `prisma generate`를 실행한다.
-- runtime은 `pg.Pool`과 `PrismaPg` adapter를 `new PrismaClient({adapter})`에 주입한다. 기본 pool은 max 10, connection timeout 3초, idle timeout 30초이며 shutdown 시 Prisma와 pool을 모두 닫는다.
+- runtime은 `pg.Pool`과 `PrismaPg` adapter를 `new PrismaClient({adapter})`에 주입한다. 기본 pool은 max 10, connection timeout 3초, idle timeout 30초이며 shutdown 시 Prisma와 pool을 모두 닫는다. Prisma transaction 획득 대기(`maxWait`)는 5초로 명시해 기본 2초가 pool의 연결 대기보다 먼저 만료되는 것을 방지한다. 획득 시간 초과 `P2028`만 일시적 dependency 장애로 처리하며 이미 종료되거나 만료된 transaction을 잘못 사용하는 오류는 일반 오류로 유지한다.
 - Prisma `BigInt`는 API mapper에서 공개 범위를 검사한 뒤 JSON number로 변환한다.
 - lint와 format은 ESLint·Prettier를 사용하고 CI는 `format:check`, `lint`, `typecheck`를 별도 실행한다.
 - 기본 HTTP port는 `3000`이며 Nest shutdown hook으로 graceful shutdown한다.
