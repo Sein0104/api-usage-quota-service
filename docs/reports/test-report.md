@@ -3,7 +3,7 @@
 ## 검증 기준
 
 - 기록일: 2026-11-25
-- 기준 commit: `16a9abffb9cf2be54af3e000c0cd039785ba3158` (보고서만 별도 후속 commit)
+- runtime 기준 commit: `16a9abffb9cf2be54af3e000c0cd039785ba3158` (보고서와 Linux E2E listener 보완은 별도 후속 commit)
 - 로컬 도구: Node.js 24.16.0, npm 11.13.0
 - 컨테이너 데이터베이스: PostgreSQL 18.3
 
@@ -37,6 +37,8 @@
 | Compose smoke | `npm run test:smoke` | 4 tests, 실패 0 |
 
 총 424개 테스트가 통과했습니다. 통합 테스트 36개에는 usage terminal 저장이 실패할 때 ACCEPTED 결과, 신규 daily row를 만든 429 결과, 동일 idempotency key의 대기 owner를 각각 완전히 rollback하는 3개 시나리오가 포함됩니다. 추가 회귀 테스트는 실제 pool 2.2초 점유 후에도 usage transaction이 정상 집계되는지 검증합니다. 단위 테스트는 P2028 획득 오류와 잘못 닫히거나 만료된 transaction 사용 오류를 구분합니다.
+
+Linux CI에서 병렬 E2E 요청 중 Supertest가 자동 생성한 listener를 첫 응답 후 닫아 다른 요청이 ECONNRESET으로 실패하는 경합을 발견했습니다. 병렬 요청을 쓰는 API Key lifecycle·daily usage·audit suite가 listener를 직접 시작하고 suite 종료 시 닫도록 통일했습니다. 재시도로 실패를 숨기거나 HTTP 기대값을 완화하지 않습니다. 최종 원격 결과는 해당 PR의 static/postgres-tests/docker checks에서 확인합니다.
 
 ## Docker 재현 검증
 
