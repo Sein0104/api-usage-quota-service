@@ -1,6 +1,26 @@
 import { isDatabaseDependencyError } from './dependency-error.js';
 
 describe('isDatabaseDependencyError', () => {
+  it('recognizes transaction acquisition timeout as temporary unavailability', () => {
+    expect(
+      isDatabaseDependencyError({
+        code: 'P2028',
+        message:
+          'Transaction API error: Unable to start a transaction in the given time.',
+        meta: {},
+      }),
+    ).toBe(true);
+  });
+
+  it('does not hide invalid or expired transaction programming errors', () => {
+    for (const message of [
+      'Transaction API error: Transaction already closed: A query cannot be executed on a committed transaction.',
+      'Transaction API error: A query cannot be executed on an expired transaction.',
+    ]) {
+      expect(isDatabaseDependencyError({ code: 'P2028', message })).toBe(false);
+    }
+  });
+
   it.each([
     [{ code: 'P2037' }],
     [

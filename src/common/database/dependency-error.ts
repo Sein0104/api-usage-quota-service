@@ -14,6 +14,13 @@ export function isDatabaseDependencyError(error: unknown): boolean {
   if (typeof error !== 'object' || error === null || !('code' in error))
     return false;
   const code = String(error.code);
+  if (code === 'P2028') {
+    return (
+      'message' in error &&
+      typeof error.message === 'string' &&
+      error.message.endsWith('Unable to start a transaction in the given time.')
+    );
+  }
   if (
     directCodes.has(code) ||
     connectionCodes.has(code) ||

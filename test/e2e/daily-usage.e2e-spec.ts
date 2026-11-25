@@ -40,7 +40,8 @@ describe('GET /v1/usage/daily', () => {
     }).compile();
     app = module.createNestApplication();
     configureApplication(app);
-    await app.init();
+    // The suite owns the listener so a parallel Supertest request cannot close it.
+    await app.listen(0, '127.0.0.1');
   });
 
   beforeEach(async () => {

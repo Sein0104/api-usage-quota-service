@@ -1,6 +1,7 @@
 .worktrees/
 .tools/
 node_modules/
+.npm-cache/
 dist/
 coverage/
 .env

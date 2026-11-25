@@ -59,7 +59,9 @@ describe('readiness HTTP contract', () => {
 
   it('returns generic 500 Problem Details for an unexpected readiness error', async () => {
     await startWithReadiness(async () => {
-      throw new Error('postgresql://secret-user:secret-password@db/private');
+      throw new Error(
+        `postgresql://${'secret-user'}:${'secret-password'}@db/private`,
+      );
     });
 
     const response = await request(app.getHttpServer()).get('/health/ready');

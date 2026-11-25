@@ -36,7 +36,8 @@ describe('API key list, revoke, and rotation lifecycle', () => {
     }).compile();
     app = module.createNestApplication();
     configureApplication(app);
-    await app.init();
+    // The suite owns the listener so a parallel Supertest request cannot close it.
+    await app.listen(0, '127.0.0.1');
 
     const bootstrap = await request(app.getHttpServer())
       .post('/v1/admin/projects')

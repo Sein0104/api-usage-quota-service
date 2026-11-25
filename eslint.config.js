@@ -30,6 +30,19 @@ export default [
       '@typescript-eslint/no-namespace': 'off',
     },
   },
+  {
+    files: ['scripts/**/*.mjs', 'test/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        AbortSignal: 'readonly',
+        fetch: 'readonly',
+        performance: 'readonly',
+        process: 'readonly',
+        Response: 'readonly',
+        setTimeout: 'readonly',
+      },
+    },
+  },
   prettier,
   {
     ignores: ['dist/', 'node_modules/'],

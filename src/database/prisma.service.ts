@@ -10,8 +10,12 @@ export class PrismaService
   implements OnApplicationShutdown
 {
   constructor(@Inject(PG_POOL) private readonly pool: Pool) {
-    // Prisma 7.9.1 accepts an externally owned pg.Pool. We own its shutdown here.
-    super({ adapter: new PrismaPg(pool) });
+    // Let the pool's 3s acquisition deadline finish before Prisma gives up.
+    // Prisma's default 2s maxWait otherwise rejects still-viable queued work.
+    super({
+      adapter: new PrismaPg(pool),
+      transactionOptions: { maxWait: 5_000 },
+    });
   }
 
   async onApplicationShutdown(): Promise<void> {

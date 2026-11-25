@@ -1,0 +1,76 @@
+name: Benchmark
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: 24.16.0
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      DATABASE_URL: postgresql://generate:generate@127.0.0.1:5432/not-connected
+      POSTGRES_PASSWORD: benchmark-database-password
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          cache: npm
+          node-version: ${{ env.NODE_VERSION }}
+      - run: npm install --global npm@11.13.0
+      - run: npm ci
+      - run: npm run prisma:generate
+      - name: Generate ephemeral Compose secrets
+        shell: bash
+        run: |
+          admin="$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=')"
+          metrics="$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=')"
+          pepper="$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=')"
+          printf '::add-mask::%s\n' "$admin" "$metrics" "$pepper"
+          printf 'SYSTEM_ADMIN_TOKEN=%s\nMETRICS_TOKEN=%s\nAPI_KEY_PEPPER=%s\n' "$admin" "$metrics" "$pepper" >> "$GITHUB_ENV"
+      - run: docker compose up --build --wait --wait-timeout 180
+      - name: Create benchmark project
+        shell: bash
+        run: |
+          response="$(curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer ${SYSTEM_ADMIN_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            --data '{"name":"benchmark","dailyQuotaUnits":1000000000}' \
+            http://127.0.0.1:3000/v1/admin/projects)"
+          key="$(node -e "const chunks=[];process.stdin.on('data',c=>chunks.push(c)).on('end',()=>process.stdout.write(JSON.parse(Buffer.concat(chunks)).secret))" <<<"${response}")"
+          echo "::add-mask::${key}"
+          echo "BENCHMARK_API_KEY=${key}" >> "${GITHUB_ENV}"
+      - name: Capture image digest
+        shell: bash
+        run: |
+          image_id="$(docker compose images -q app)"
+          test -n "${image_id}"
+          digest="$(docker image inspect --format '{{.Id}}' "${image_id}")"
+          test -n "${digest}"
+          echo "APP_IMAGE_DIGEST=${digest}" >> "$GITHUB_ENV"
+      - name: Capture PostgreSQL version
+        shell: bash
+        run: |
+          version="$(docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atqc "SHOW server_version"')"
+          test -n "${version}"
+          echo "POSTGRES_VERSION=${version}" >> "$GITHUB_ENV"
+      - run: npm run --silent benchmark > benchmark.json
+      - run: docker compose run --rm --no-deps --no-TTY -e COMMIT_SHA=${{ github.sha }} --entrypoint node migrate scripts/explain-audit.mjs > explain-audit.json
+      - name: Validate JSON artifacts
+        run: node -e "const fs=require('fs'); for (const p of ['benchmark.json','explain-audit.json']) JSON.parse(fs.readFileSync(p,'utf8'))"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: benchmark-${{ github.sha }}
+          path: |
+            benchmark.json
+            explain-audit.json
+          retention-days: 30
+      - name: Compose cleanup
+        if: always()
+        run: docker compose down --volumes --remove-orphans
