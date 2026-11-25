@@ -1,0 +1,149 @@
+{
+  "configuration": {
+    "concurrencyLevels": [
+      1,
+      10,
+      50,
+      100
+    ],
+    "percentileMethod": "nearest-rank: sorted[Math.ceil(percentile * sampleCount) - 1]",
+    "warmupPolicy": "warmup requests per worker before every concurrency repetition",
+    "repetitions": 3,
+    "requestsPerWorker": 50,
+    "timeoutMs": 30000,
+    "warmup": 20
+  },
+  "environment": {
+    "appImageDigest": "sha256:699b48914c40eeccb870872971c322b5ef919dd683459ed8d9281ed7f8988a10",
+    "commit": "16a9abffb9cf2be54af3e000c0cd039785ba3158",
+    "cpuLogicalCount": 6,
+    "cpuModel": "AMD Ryzen 5 4500U with Radeon Graphics         ",
+    "node": "v24.16.0",
+    "npm": "11.13.0",
+    "os": "win32 10.0.26200",
+    "postgres": "18.3 (Debian 18.3-1.pgdg13+1)",
+    "recordedAt": "2026-11-25T11:34:04.647Z"
+  },
+  "results": [
+    {
+      "concurrency": 1,
+      "durationSeconds": 0.9799304,
+      "p50Milliseconds": 17.124000000000024,
+      "p95Milliseconds": 36.215799999999945,
+      "p99Milliseconds": 68.26379999999995,
+      "repetition": 1,
+      "requestCount": 50,
+      "throughputPerSecond": 51.02403191083775
+    },
+    {
+      "concurrency": 1,
+      "durationSeconds": 0.9596777,
+      "p50Milliseconds": 16.780299999999897,
+      "p95Milliseconds": 34.033200000000306,
+      "p99Milliseconds": 36.745800000000145,
+      "repetition": 2,
+      "requestCount": 50,
+      "throughputPerSecond": 52.10082509992678
+    },
+    {
+      "concurrency": 1,
+      "durationSeconds": 0.7407081000000003,
+      "p50Milliseconds": 14.653999999999996,
+      "p95Milliseconds": 16.9065999999998,
+      "p99Milliseconds": 17.578199999999924,
+      "repetition": 3,
+      "requestCount": 50,
+      "throughputPerSecond": 67.50297451857213
+    },
+    {
+      "concurrency": 10,
+      "durationSeconds": 4.0933733000000005,
+      "p50Milliseconds": 68.65809999999874,
+      "p95Milliseconds": 173.60879999999997,
+      "p99Milliseconds": 226.71149999999943,
+      "repetition": 1,
+      "requestCount": 500,
+      "throughputPerSecond": 122.1486444932838
+    },
+    {
+      "concurrency": 10,
+      "durationSeconds": 3.7454563999999992,
+      "p50Milliseconds": 63.45339999999851,
+      "p95Milliseconds": 158.71459999999934,
+      "p99Milliseconds": 208.10609999999906,
+      "repetition": 2,
+      "requestCount": 500,
+      "throughputPerSecond": 133.4950795315626
+    },
+    {
+      "concurrency": 10,
+      "durationSeconds": 3.8091160000000017,
+      "p50Milliseconds": 62.78199999999924,
+      "p95Milliseconds": 166.64229999999952,
+      "p99Milliseconds": 222.58369999999923,
+      "repetition": 3,
+      "requestCount": 500,
+      "throughputPerSecond": 131.26405181674693
+    },
+    {
+      "concurrency": 50,
+      "durationSeconds": 20.3483439,
+      "p50Milliseconds": 388.73969999999827,
+      "p95Milliseconds": 539.1636999999973,
+      "p99Milliseconds": 624.0395999999964,
+      "repetition": 1,
+      "requestCount": 2500,
+      "throughputPerSecond": 122.86012130943
+    },
+    {
+      "concurrency": 50,
+      "durationSeconds": 18.644642100000006,
+      "p50Milliseconds": 356.79030000000057,
+      "p95Milliseconds": 495.41270000000077,
+      "p99Milliseconds": 575.1212999999989,
+      "repetition": 2,
+      "requestCount": 2500,
+      "throughputPerSecond": 134.0867787427252
+    },
+    {
+      "concurrency": 50,
+      "durationSeconds": 20.1334672,
+      "p50Milliseconds": 345.96229999999923,
+      "p95Milliseconds": 597.1931999999942,
+      "p99Milliseconds": 1593.4743000000017,
+      "repetition": 3,
+      "requestCount": 2500,
+      "throughputPerSecond": 124.17135981426985
+    },
+    {
+      "concurrency": 100,
+      "durationSeconds": 36.04862470000001,
+      "p50Milliseconds": 699.8042999999889,
+      "p95Milliseconds": 860.5669000000053,
+      "p99Milliseconds": 1005.9488000000129,
+      "repetition": 1,
+      "requestCount": 5000,
+      "throughputPerSecond": 138.70154663625763
+    },
+    {
+      "concurrency": 100,
+      "durationSeconds": 35.439434899999995,
+      "p50Milliseconds": 692.1542999999947,
+      "p95Milliseconds": 819.4612999999954,
+      "p99Milliseconds": 910.8092999999935,
+      "repetition": 2,
+      "requestCount": 5000,
+      "throughputPerSecond": 141.08577109394034
+    },
+    {
+      "concurrency": 100,
+      "durationSeconds": 36.763931500000005,
+      "p50Milliseconds": 704.8107000000018,
+      "p95Milliseconds": 896.9047000000137,
+      "p99Milliseconds": 1325.6892999999982,
+      "repetition": 3,
+      "requestCount": 5000,
+      "throughputPerSecond": 136.0028646555388
+    }
+  ]
+}
